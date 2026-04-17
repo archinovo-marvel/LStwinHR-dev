@@ -1,0 +1,17 @@
+{
+  "watch": [
+    "server.js",
+    "db.js",
+    "services"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "candidate-data.json",
+    "uploads/**",
+    "server_stdout.log",
+    "server_stderr.log",
+    "node_modules/**",
+    "client/**"
+  ],
+  "exec": "node server.js"
+}

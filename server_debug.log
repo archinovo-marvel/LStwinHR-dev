@@ -1,0 +1,18 @@
+[2026-01-16T02:38:43.728Z] Login attempt: aaa
+[2026-01-16T02:38:43.735Z] Loaded 0 local users
+[2026-01-16T02:38:43.736Z] Local login failed. User found: false
+[2026-01-16T02:38:43.736Z] 本地未找到用户 aaa，尝试 AuthHub 远程登录...
+[2026-01-16T02:38:43.737Z] AuthHub Endpoint: http://localhost:3000/api/system-accounts/login
+[2026-01-16T02:38:43.739Z] AuthHub Payload: {"userId":"aaa","password":"111111","systemCode":"zplx"}
+[2026-01-16T02:38:43.790Z] AuthHub 远程登录尝试失败: Request failed with status code 404
+[2026-01-16T02:38:43.791Z] AuthHub Remote Status: 404
+[2026-01-16T02:38:43.792Z] AuthHub Remote Data: ""
+[2026-01-16T02:52:24.103Z] Login attempt: aaa
+[2026-01-16T02:52:24.110Z] Loaded 0 local users
+[2026-01-16T02:52:24.111Z] Local login failed. User found: false
+[2026-01-16T02:52:24.112Z] 本地未找到用户 aaa，尝试 AuthHub 远程登录...
+[2026-01-16T02:52:24.113Z] AuthHub Endpoint: http://localhost:5000/api/system-accounts/login
+[2026-01-16T02:52:24.114Z] AuthHub Payload: {"userId":"aaa","password":"111111","systemCode":"zplx"}
+[2026-01-16T02:52:24.323Z] AuthHub Response Status: 200
+[2026-01-16T02:52:24.324Z] AuthHub Response Data: {"success":true,"message":"登录验证成功","data":{"id":"2","userId":"aaa","phone":"18859852673","memberLevel":"NON_MEMBER","accountStatus":"ACTIVE","levelEffectTime":null,"permissionExpire":null,"createdAt":"2026-01-16T02:02:22.815Z"}}
+[2026-01-16T02:52:24.325Z] AuthHub 远程登录成功，正在同步用户到本地...

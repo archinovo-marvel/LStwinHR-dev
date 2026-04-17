@@ -1,0 +1,7 @@
+.vscode/
+Error-Folders/
+文档/
+client/node_modules
+node_modules
+client/build
+错误日志

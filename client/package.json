@@ -1,0 +1,49 @@
+{
+  "name": "招聘灵犀前端",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@ant-design/icons": "^5.0.1",
+    "@react-three/drei": "^9.88.13",
+    "@react-three/fiber": "^8.15.19",
+    "@testing-library/jest-dom": "^5.16.4",
+    "@testing-library/react": "^13.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "antd": "^5.2.2",
+    "axios": "^1.3.4",
+    "chart.js": "^4.2.1",
+    "framer-motion": "^10.0.1",
+    "http-proxy-middleware": "^2.0.6",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
+    "react-dropzone": "^14.2.3",
+    "react-router-dom": "^6.8.1",
+    "react-scripts": "^5.0.1",
+    "react-webcam": "^7.0.1",
+    "socket.io-client": "^4.6.1",
+    "styled-components": "^5.3.9",
+    "three": "^0.182.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "npm-force-resolutions": "^0.0.10"
+  }
+}

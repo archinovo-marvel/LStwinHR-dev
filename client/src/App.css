@@ -1,0 +1,190 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 动画效果 */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ant-card {
+    margin-bottom: 16px;
+  }
+  
+  .ant-row {
+    margin-left: -8px !important;
+    margin-right: -8px !important;
+  }
+  
+  .ant-col {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
+
+/* 自定义组件样式 */
+.custom-card {
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.custom-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+/* 按钮样式 */
+.custom-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.custom-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 输入框样式 */
+.custom-input {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.custom-input:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+/* 表格样式 */
+.custom-table .ant-table-thead > tr > th {
+  background-color: #fafafa;
+  font-weight: 600;
+}
+
+.custom-table .ant-table-tbody > tr:hover > td {
+  background-color: #f0f8ff;
+}
+
+/* 加载状态 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+/* 空状态 */
+.empty-container {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+.empty-container .anticon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+/* 消息气泡 */
+.message-bubble {
+  max-width: 70%;
+  word-wrap: break-word;
+  border-radius: 18px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+
+.message-bubble.user {
+  background: #1890ff;
+  color: white;
+  border-radius: 18px 18px 4px 18px;
+  margin-left: auto;
+}
+
+.message-bubble.bot {
+  background: white;
+  color: #333;
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 进度条样式 */
+.custom-progress .ant-progress-bg {
+  border-radius: 4px;
+}
+
+/* 标签样式 */
+.custom-tag {
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* 头像样式 */
+.custom-avatar {
+  border: 2px solid #f0f0f0;
+  transition: all 0.3s ease;
+}
+
+.custom-avatar:hover {
+  border-color: #1890ff;
+  transform: scale(1.05);
+}
+
+

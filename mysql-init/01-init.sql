@@ -1,0 +1,24 @@
+SET NAMES utf8mb4;
+
+CREATE DATABASE IF NOT EXISTS `luanshu-authhub`
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE `luanshu-authhub`;
+
+CREATE TABLE IF NOT EXISTS `User` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `username` VARCHAR(100) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
+  `phone` VARCHAR(30) DEFAULT NULL,
+  `password` VARCHAR(255) NOT NULL,
+  `role` VARCHAR(50) NOT NULL DEFAULT 'USER',
+  `systemCode` VARCHAR(50) DEFAULT 'zplx',
+  `company` VARCHAR(255) DEFAULT NULL,
+  `memberLevel` VARCHAR(50) DEFAULT '普通会员',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_username` (`username`),
+  UNIQUE KEY `uk_user_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

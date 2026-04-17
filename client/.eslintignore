@@ -1,0 +1,23 @@
+# 忽略SDK文件，这些是第三方库文件
+src/sdk/
+src/sdk/**
+src/sdk/**/*.js
+src/sdk/**/*.ts
+src/sdk/**/*.jsx
+src/sdk/**/*.tsx
+
+# 忽略构建文件
+build/
+dist/
+
+# 忽略node_modules
+node_modules/
+
+# 忽略其他不需要检查的文件
+*.min.js
+*.bundle.js
+
+# 忽略特定的SDK文件
+src/sdk/3.1.2.1002/avatar-sdk-web_3.1.2.1002/index-OS7Lza_r.js
+src/sdk/3.1.2.1002/avatar-sdk-web_3.1.2.1002/webrtc-player--YuOiwFd.js
+src/sdk/3.1.2.1002/avatar-sdk-web_3.1.2.1002/xrtc-player-BJTnVhG9.js

@@ -1,0 +1,29 @@
+[
+  {
+    "id": 1,
+    "userId": "admin",
+    "phone": "13800000000",
+    "email": "admin@example.com",
+    "password": "password123",
+    "registeredAt": "2026-01-30T00:00:00Z",
+    "source": "local"
+  },
+  {
+    "id": 2,
+    "userId": "aaa",
+    "phone": "17898765434",
+    "email": "3073435138@qq.com",
+    "password": "111111",
+    "registeredAt": "2026-03-26T08:38:23.780Z",
+    "source": "authhub_sync"
+  },
+  {
+    "id": 3,
+    "userId": "abc",
+    "phone": "15957090542",
+    "email": "3071986832@qq.com",
+    "password": "123",
+    "registeredAt": "2026-03-30T01:40:34.223Z",
+    "source": "authhub_sync"
+  }
+]

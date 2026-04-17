@@ -1,0 +1,5 @@
+users.json
+candidate-data.json
+uploads/*
+public/*
+*.log

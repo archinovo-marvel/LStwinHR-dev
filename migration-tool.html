@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>候选人数据迁移工具</title>
+  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 40px;
+      max-width: 700px;
+      width: 100%;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 24px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .config-section {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .config-section h3 {
+      color: #333;
+      margin-bottom: 16px;
+      font-size: 16px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      color: #555;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .form-group small {
+      display: block;
+      margin-top: 4px;
+      color: #888;
+      font-size: 12px;
+    }
+    .info-box {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #1565c0;
+    }
+    .info-box.warning {
+      background: #fff3e0;
+      border-left-color: #ff9800;
+      color: #e65100;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .stat-card.warning {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    .stat-card.success {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    .stat-number {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 12px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #666;
+    }
+    .btn-secondary:hover {
+      background: #d0d0d0;
+    }
+    .log-container {
+      background: #1e1e1e;
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+      color: #d4d4d4;
+      margin-top: 20px;
+    }
+    .log-entry {
+      margin-bottom: 4px;
+      line-height: 1.5;
+    }
+    .log-entry.success { color: #4caf50; }
+    .log-entry.error { color: #f44336; }
+    .log-entry.info { color: #2196f3; }
+    .log-entry.warning { color: #ff9800; }
+    .progress-bar {
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 16px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s;
+    }
+    .result-summary {
+      background: #f0f0f0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 20px;
+    }
+    .result-summary h4 {
+      margin-bottom: 12px;
+      color: #333;
+    }
+    .result-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #ddd;
+    }
+    .result-item:last-child {
+      border-bottom: none;
+    }
+    .steps {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .steps h4 {
+      margin-bottom: 12px;
+      color: #333;
+    }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .step-num {
+      background: #667eea;
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .step-content {
+      color: #555;
+      line-height: 1.5;
+    }
+    .step-content code {
+      background: #e0e0e0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 候选人数据迁移工具</h1>
+    <p class="subtitle">将本地 IndexedDB 中的候选人数据迁移到服务器数据库</p>
+
+    <div class="steps">
+      <h4>📋 使用步骤</h4>
+      <div class="step">
+        <span class="step-num">1</span>
+        <span class="step-content">
+          在浏览器中打开 <code>http://localhost:3006</code> 并登录系统<br>
+          按 <code>F12</code> 打开控制台，执行以下命令获取信息：
+        </span>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <span class="step-content">
+          在控制台执行 <code>localStorage.getItem('user')</code> 获取用户信息，复制其中的 <code>id</code> 值
+        </span>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <span class="step-content">
+          在控制台执行 <code>localStorage.getItem('token')</code> 获取登录令牌
+        </span>
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        <span class="step-content">
+          在下方配置框中粘贴用户ID和令牌，然后点击扫描
+        </span>
+      </div>
+    </div>
+
+    <div class="info-box warning">
+      <strong>⚠️ 重要提示：</strong>由于跨域限制，你需要手动复制下面的信息。此工具打开后是 file:// 协议，无法直接读取 localhost 的 localStorage。
+    </div>
+
+    <div class="config-section">
+      <h3>📋 配置信息</h3>
+      <div class="form-group">
+        <label>API 基础地址</label>
+        <input type="text" id="apiBaseUrl" value="http://localhost:3005" placeholder="例如: http://localhost:3005">
+      </div>
+      <div class="form-group">
+        <label>用户 ID</label>
+        <input type="number" id="userId" placeholder="从 localStorage.getItem('user') 获取">
+        <small>登录系统后，在控制台执行: localStorage.getItem('user')</small>
+      </div>
+      <div class="form-group">
+        <label>登录令牌 (Token)</label>
+        <input type="text" id="token" placeholder="从 localStorage.getItem('token') 获取">
+        <small>登录系统后，在控制台执行: localStorage.getItem('token')</small>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-number" id="localCount">-</div>
+        <div class="stat-label">本地数据</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-number" id="serverCount">-</div>
+        <div class="stat-label">服务器已有</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-number" id="toImport">-</div>
+        <div class="stat-label">待导入</div>
+      </div>
+    </div>
+
+    <button class="btn btn-secondary" id="scanBtn" onclick="scanLocalData()">
+      🔍 扫描本地数据
+    </button>
+
+    <button class="btn btn-primary" id="importBtn" onclick="startImport()" disabled>
+      🚀 开始导入
+    </button>
+
+    <div class="progress-bar" id="progressBar" style="display: none;">
+      <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+
+    <div class="log-container" id="logContainer"></div>
+
+    <div class="result-summary" id="resultSummary" style="display: none;">
+      <h4>📊 导入结果</h4>
+      <div class="result-item">
+        <span>总数据条数</span>
+        <span id="resultTotal">0</span>
+      </div>
+      <div class="result-item">
+        <span>成功导入</span>
+        <span id="resultSuccess" style="color: #4caf50;">0</span>
+      </div>
+      <div class="result-item">
+        <span>导入失败</span>
+        <span id="resultFailed" style="color: #f44336;">0</span>
+      </div>
+      <div class="result-item">
+        <span>跳过（已存在）</span>
+        <span id="resultSkipped" style="color: #ff9800;">0</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let localCandidates = [];
+    let importedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+
+    function log(message, type = 'info') {
+      const container = document.getElementById('logContainer');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      container.appendChild(entry);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function getDbName(userId) {
+      return `CandidateDatabase_user_${userId}`;
+    }
+
+    async function openCandidateDb(userId) {
+      const dbName = getDbName(userId);
+      log(`打开数据库: ${dbName}`, 'info');
+
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 2);
+
+        request.onerror = () => {
+          reject(new Error(`打开数据库失败: ${request.error}`));
+        };
+
+        request.onsuccess = () => {
+          resolve(request.result);
+        };
+
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('candidates')) {
+            const store = db.createObjectStore('candidates', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            store.createIndex('name', 'name', { unique: false });
+            store.createIndex('position', 'position', { unique: false });
+            store.createIndex('submitTime', 'submitTime', { unique: false });
+            store.createIndex('userId', 'userId', { unique: false });
+          }
+        };
+      });
+    }
+
+    async function scanLocalData() {
+      const userId = document.getElementById('userId').value;
+
+      if (!userId) {
+        log('请输入用户ID', 'error');
+        return;
+      }
+
+      const scanBtn = document.getElementById('scanBtn');
+      scanBtn.disabled = true;
+      scanBtn.textContent = '⏳ 扫描中...';
+
+      try {
+        const db = await openCandidateDb(userId);
+
+        const transaction = db.transaction(['candidates'], 'readonly');
+        const store = transaction.objectStore('candidates');
+        const request = store.getAll();
+
+        localCandidates = await new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+
+        db.close();
+
+        document.getElementById('localCount').textContent = localCandidates.length;
+        document.getElementById('toImport').textContent = localCandidates.length;
+
+        if (localCandidates.length === 0) {
+          log('本地没有找到候选人数据', 'warning');
+          log('可能原因: 该用户ID对应的数据库为空，或用户ID输入错误', 'warning');
+        } else {
+          log(`扫描完成，找到 ${localCandidates.length} 条本地数据`, 'success');
+          log(`数据库名称: ${getDbName(userId)}`, 'info');
+
+          const token = document.getElementById('token').value;
+          if (token) {
+            await checkServerData();
+          } else {
+            log('请输入登录令牌后检查服务器数据', 'warning');
+            document.getElementById('importBtn').disabled = false;
+          }
+        }
+
+      } catch (error) {
+        log(`扫描失败: ${error.message}`, 'error');
+        if (error.message.includes('打开数据库失败')) {
+          log('请确认用户ID是否正确', 'warning');
+        }
+      } finally {
+        scanBtn.disabled = false;
+        scanBtn.textContent = '🔍 扫描本地数据';
+      }
+    }
+
+    async function checkServerData() {
+      const apiBaseUrl = document.getElementById('apiBaseUrl').value;
+      const token = document.getElementById('token').value;
+
+      if (!token) {
+        log('请输入登录令牌', 'warning');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/candidates`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const serverData = await response.json();
+          const serverCount = Array.isArray(serverData) ? serverData.length : 0;
+          document.getElementById('serverCount').textContent = serverCount;
+
+          const toImport = localCandidates.filter(local =>
+            !serverData.some(server =>
+              (server.email && local.email && server.email === local.email) ||
+              (server.phone && local.phone && server.phone === local.phone)
+            )
+          );
+          document.getElementById('toImport').textContent = toImport.length;
+          localCandidates = toImport;
+
+          if (toImport.length > 0) {
+            document.getElementById('importBtn').disabled = false;
+            log(`服务器已有 ${serverCount} 条数据，待导入 ${toImport.length} 条`, 'success');
+          } else if (serverCount > 0) {
+            log('所有数据已存在于服务器，无需导入', 'warning');
+          } else {
+            document.getElementById('importBtn').disabled = false;
+            log('将导入全部本地数据', 'info');
+          }
+        } else if (response.status === 401) {
+          log('令牌无效或已过期，请重新获取', 'error');
+        } else {
+          log(`检查服务器数据失败: ${response.status}`, 'error');
+        }
+      } catch (error) {
+        log(`连接服务器失败: ${error.message}`, 'error');
+        document.getElementById('serverCount').textContent = '?';
+      }
+    }
+
+    async function startImport() {
+      const apiBaseUrl = document.getElementById('apiBaseUrl').value;
+      const userId = document.getElementById('userId').value;
+      const token = document.getElementById('token').value;
+
+      if (!userId || !token) {
+        log('请输入用户ID和登录令牌', 'error');
+        return;
+      }
+
+      if (localCandidates.length === 0) {
+        log('没有可导入的数据', 'warning');
+        return;
+      }
+
+      const importBtn = document.getElementById('importBtn');
+      importBtn.disabled = true;
+      importBtn.textContent = '⏳ 导入中...';
+
+      importedCount = 0;
+      failedCount = 0;
+      skippedCount = 0;
+
+      document.getElementById('resultSummary').style.display = 'none';
+      document.getElementById('progressBar').style.display = 'block';
+
+      try {
+        log('开始导入数据...', 'info');
+        log(`API 地址: ${apiBaseUrl}`, 'info');
+
+        for (let i = 0; i < localCandidates.length; i++) {
+          const candidate = localCandidates[i];
+          const progress = Math.round(((i + 1) / localCandidates.length) * 100);
+          document.getElementById('progressFill').style.width = `${progress}%`;
+
+          try {
+            const formData = new FormData();
+            formData.append('name', candidate.name || '');
+            formData.append('position', candidate.position || '');
+            formData.append('positionDescription', candidate.positionDescription || '');
+            formData.append('phone', candidate.phone || '');
+            formData.append('email', candidate.email || '');
+            formData.append('mbti', candidate.mbti || '');
+            formData.append('submitTime', candidate.submitTime || '');
+            formData.append('status', candidate.status || 'pending');
+
+            if (candidate.resumeAnalysis) {
+              try {
+                const analysis = typeof candidate.resumeAnalysis === 'string'
+                  ? JSON.parse(candidate.resumeAnalysis)
+                  : candidate.resumeAnalysis;
+                formData.append('resumeAnalysis', JSON.stringify(analysis));
+              } catch (e) {
+                formData.append('resumeAnalysis', candidate.resumeAnalysis);
+              }
+            }
+
+            if (candidate.resumeScore) {
+              formData.append('resumeScore', candidate.resumeScore);
+            }
+            if (candidate.mbtiScore) {
+              formData.append('mbtiScore', candidate.mbtiScore);
+            }
+            if (candidate.matchScore) {
+              formData.append('matchScore', candidate.matchScore);
+            }
+            if (candidate.finalScore) {
+              formData.append('finalScore', candidate.finalScore);
+            }
+            if (candidate.recommendation) {
+              formData.append('recommendation', candidate.recommendation);
+            }
+
+            const response = await fetch(`${apiBaseUrl}/api/candidates`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
+              body: formData
+            });
+
+            if (response.ok) {
+              importedCount++;
+              log(`✓ 导入成功: ${candidate.name} (${candidate.position || '未填岗位'})`, 'success');
+            } else if (response.status === 409) {
+              skippedCount++;
+              log(`⊘ 跳过（已存在）: ${candidate.name}`, 'warning');
+            } else if (response.status === 401) {
+              failedCount++;
+              log(`✗ 令牌无效: ${candidate.name}`, 'error');
+              break;
+            } else {
+              failedCount++;
+              const errorText = await response.text();
+              log(`✗ 导入失败: ${candidate.name} - ${response.status}: ${errorText.substring(0, 100)}`, 'error');
+            }
+
+          } catch (error) {
+            failedCount++;
+            log(`✗ 导入失败: ${candidate.name} - ${error.message}`, 'error');
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        document.getElementById('progressFill').style.width = '100%';
+
+        document.getElementById('resultTotal').textContent = localCandidates.length;
+        document.getElementById('resultSuccess').textContent = importedCount;
+        document.getElementById('resultFailed').textContent = failedCount;
+        document.getElementById('resultSkipped').textContent = skippedCount;
+        document.getElementById('resultSummary').style.display = 'block';
+
+        log('='.repeat(50), 'info');
+        if (importedCount > 0) {
+          log(`导入完成！成功: ${importedCount}, 失败: ${failedCount}, 跳过: ${skippedCount}`, 'success');
+        } else {
+          log(`导入完成！成功: ${importedCount}, 失败: ${failedCount}, 跳过: ${skippedCount}`, failedCount > 0 ? 'error' : 'warning');
+        }
+
+      } catch (error) {
+        log(`导入过程出错: ${error.message}`, 'error');
+      } finally {
+        importBtn.disabled = false;
+        importBtn.textContent = '🚀 开始导入';
+        setTimeout(() => {
+          document.getElementById('progressBar').style.display = 'none';
+        }, 2000);
+      }
+    }
+
+    window.onload = () => {
+      log('迁移工具已就绪', 'info');
+      log('请先在浏览器中打开应用并登录，然后获取用户ID和令牌', 'info');
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+services:
+  local-llm-vl:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    volumes:
+      - ../models:/models
+      - ./qwen3.5-no-thinking.jinja:/templates/qwen3.5-no-thinking.jinja:ro
+    command:
+      - -m
+      - /models/gguf/Qwen3.5-9B-VLM-Q4_K_M-GGUF/Qwen3.5-9B-Q4_K_M.gguf
+      - --mmproj
+      - /models/gguf/Qwen3.5-9B-VLM-Q4_K_M-GGUF/mmproj-F16.gguf
+      - --jinja
+      - --chat-template-file
+      - /templates/qwen3.5-no-thinking.jinja
+      - --chat-template-kwargs
+      - '{"enable_thinking": false}'
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --ctx-size
+      - "32768"
+      - --parallel
+      - "1"
+      - --gpu-layers
+      - "99"
+      - --no-warmup
+      - --alias
+      - qwen3.5-9b-vlm-gguf
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  mysql:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=luanshu-authhub
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uuser", "-ppassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+
+  # AI招聘系统后端
+  ai-hr-backend:
+    build: .
+    ports:
+      - "3005:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - AUTHHUB_URL=http://host.docker.internal:5000
+      - AUTHUB_WEBHOOK_SECRET=your-secret
+      - DATABASE_URL=mongodb://admin:password@mongodb:27017/ai_hr_db?authSource=admin
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen3.5:9b
+      - LOCAL_LLM_ENABLED=true
+      - LOCAL_LLM_URL=http://local-llm-vl:8000
+      - LOCAL_LLM_MODEL=qwen3.5-9b-vlm-gguf
+      - LOCAL_LLM_VL_URL=http://local-llm-vl:8000
+      - LOCAL_LLM_VL_MODEL=qwen3.5-9b-vlm-gguf
+      - DOCKER_CONTROL_ENABLED=true
+      - OLLAMA_CONTAINER_NAME=lstwinhr-dev_v001-ollama-1
+      - LOCAL_LLM_VL_CONTAINER_NAME=lstwinhr-dev_v003-local-llm-vl-1
+      - EMAIL_HOST=smtp.exmail.qq.com
+      - EMAIL_PORT=465
+      - EMAIL_SECURE=true
+      - EMAIL_USER=gaolu@lstwin.top
+      - EMAIL_PASSWORD=EpZqKtR6bFjB3g2o
+      - EMAIL_FROM_NAME=孪数AI面试系统
+      - EMAIL_FROM_ADDRESS=gaolu@lstwin.top
+      - VERIFICATION_CODE_EXPIRE_TIME=300000
+      - VERIFICATION_CODE_LENGTH=6
+      # MySQL数据库配置（连接Docker内部mysql容器）
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=luanshu-authhub
+      - JWT_SECRET=your_jwt_secret_change_this_in_production
+      # 讯飞虚拟人配置
+      - XUNFEI_APP_ID=${XUNFEI_APP_ID}
+      - XUNFEI_API_KEY=${XUNFEI_API_KEY}
+      - XUNFEI_API_SECRET=${XUNFEI_API_SECRET}
+      - XUNFEI_SCENE_ID=${XUNFEI_SCENE_ID}
+      # DeepSeek API配置
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      # 本地VL模型OCR配置
+      - VL_OCR_API_URL=http://ai-hr-backend:3001/api/chat
+      # 本地VL分析超时设置(120-180秒范围，Qwen3.5-9B多模态模型需要较长时间)
+      - LOCAL_VL_ANALYSIS_TIMEOUT_MS=120000
+      - SCANNED_PDF_LOCAL_VL_ANALYSIS_TIMEOUT_MS=180000
+      - DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS=90000
+    volumes:
+      - ./uploads:/app/uploads
+      - ./public:/app/public
+      - .:/app
+      - /app/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      mysql:
+        condition: service_healthy
+      local-llm-vl:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+    command: ["nodemon", "--ignore", "users.json", "--ignore", "candidate-data.json", "--ignore", "public/*", "server.js"]
+
+  # 前端应用
+  ai-hr-frontend:
+    build: ./client
+    ports:
+      - "3006:3000"
+    environment:
+      - REACT_APP_API_URL=http://ai-hr-backend:3001
+      - REACT_APP_VIRTUAL_HUMAN_ENABLED=${REACT_APP_VIRTUAL_HUMAN_ENABLED:-true}
+      - REACT_APP_XUNFEI_APP_ID=${XUNFEI_APP_ID}
+      - REACT_APP_XUNFEI_API_KEY=${XUNFEI_API_KEY}
+      - REACT_APP_XUNFEI_API_SECRET=${XUNFEI_API_SECRET}
+      - REACT_APP_XUNFEI_SCENE_ID=${XUNFEI_SCENE_ID}
+      - REACT_APP_XUNFEI_AVATAR_ID=${XUNFEI_AVATAR_ID}
+      - REACT_APP_XUNFEI_VCN=${XUNFEI_VCN}
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      # CRA dev server websocket - 使用默认 sockjs 路径
+      - WDS_SOCKET_PORT=3006
+      - BROWSER=none
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - ai-hr-backend
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+    command: ["node", "node_modules/react-scripts/scripts/start.js"]
+
+  # MongoDB数据库（可选）
+  mongodb:
+    image: mongo:4.4
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+
+  # Redis缓存（可选）
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+
+  # Nginx反向代理
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - ai-hr-backend
+      - ai-hr-frontend
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+
+volumes:
+  mysql_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  ai-hr-network:
+    driver: bridge

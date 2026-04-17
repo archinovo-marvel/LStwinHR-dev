@@ -1,0 +1,41 @@
+/* 修复 Ant Design 的 -ms-high-contrast 弃用警告 */
+/* 使用新的 Forced Colors Mode 标准 */
+
+/* 覆盖 Ant Design 的高对比度样式 */
+@media (prefers-contrast: high) {
+  .ant-list-item {
+    border-color: ButtonText;
+  }
+  
+  .ant-card {
+    border-color: ButtonText;
+  }
+  
+  .ant-btn {
+    border-color: ButtonText;
+  }
+  
+  .ant-input {
+    border-color: ButtonText;
+  }
+}
+
+/* 使用新的 forced-colors 媒体查询 */
+@media (forced-colors: active) {
+  .ant-list-item {
+    border-color: ButtonText;
+  }
+  
+  .ant-card {
+    border-color: ButtonText;
+  }
+  
+  .ant-btn {
+    border-color: ButtonText;
+  }
+  
+  .ant-input {
+    border-color: ButtonText;
+  }
+}
+
