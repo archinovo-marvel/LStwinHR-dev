@@ -9,6 +9,7 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  RobotOutlined,
   LoginOutlined,
   DownOutlined,
   FileTextOutlined
