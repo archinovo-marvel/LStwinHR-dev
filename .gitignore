@@ -5,3 +5,4 @@ client/node_modules
 node_modules
 client/build
 错误日志
+.worktrees
