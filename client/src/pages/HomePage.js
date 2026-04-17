@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Button, Typography } from 'antd';
-import { 
-  MessageOutlined, 
+import {
   RocketOutlined,
   RobotOutlined,
   FileTextOutlined,
@@ -296,6 +295,40 @@ const FeatureCard = styled(Card)`
   }
 `;
 
+// 功能卡片Flex容器
+// 功能卡片容器：桌面端使用flex水平布局，移动端（≤768px）切换为垂直布局
+// eslint-disable-next-line no-unused-vars
+const FeaturesFlexContainer = styled.div`
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 16px;
+  }
+`;
+
+// 功能卡片Flex项目
+// 功能卡片项目：弹性布局，基础宽度30%，响应式适配不同屏幕尺寸
+// eslint-disable-next-line no-unused-vars
+const FeatureFlexItem = styled.div`
+  flex: 1 1 30%; /* 基础30%，可拉伸填充 */
+  min-width: 280px;
+  max-width: 380px;
+
+  @media (max-width: 992px) {
+    flex: 1 1 45%;
+    max-width: none;
+  }
+
+  @media (max-width: 768px) {
+    flex: 1 1 100%;
+    min-width: auto;
+  }
+`;
+
 const FeatureIcon = styled.div`
   width: 52px;
   height: 52px;
@@ -365,7 +398,6 @@ const HomePage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loginPromptVisible, setLoginPromptVisible] = useState(false);
-  const [pendingRoute, setPendingRoute] = useState(null);
   const [stats, setStats] = useState({
     totalResumes: 0,
     totalInterviews: 0,
@@ -404,13 +436,13 @@ const HomePage = () => {
         weeklyPassRate: statsResult.weeklyPassRate
       });
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('获取统计数据失败:', error);
     }
   };
 
   const handleLoginRequired = (route) => {
     if (!user) {
-      setPendingRoute(route);
       setLoginPromptVisible(true);
       return false;
     }
@@ -419,7 +451,6 @@ const HomePage = () => {
 
   const handleLoginPromptClose = () => {
     setLoginPromptVisible(false);
-    setPendingRoute(null);
   };
 
   const handleLoginPromptConfirm = () => {
@@ -559,15 +590,16 @@ const HomePage = () => {
             查看全部 <ArrowRightOutlined />
           </Button>
         </SectionHeader>
-        <Row gutter={[20, 20]}>
+
+        <FeaturesFlexContainer>
           {features.map((feature, index) => (
-            <Col xs={24} sm={12} lg={6} key={index}>
+            <FeatureFlexItem key={index}>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
               >
-                <FeatureCard 
+                <FeatureCard
                   $hoverColor={feature.color === 'blue' ? colors.primary : feature.color === 'green' ? colors.success : feature.color === 'orange' ? colors.warning : colors.purple}
                   onClick={() => handleFeatureClick(feature.route)}
                 >
@@ -581,9 +613,9 @@ const HomePage = () => {
                   </FeatureAction>
                 </FeatureCard>
               </motion.div>
-            </Col>
+            </FeatureFlexItem>
           ))}
-        </Row>
+        </FeaturesFlexContainer>
       </FeaturesSection>
       <LoginPromptModal
         visible={loginPromptVisible}
