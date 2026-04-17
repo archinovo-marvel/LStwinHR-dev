@@ -1133,30 +1133,6 @@ const ProfilePage = () => {
                 </InfoItem>
               </InfoGrid>
             </InfoCard>
-            <InfoCard title="安全设置">
-              <SecurityItem>
-                <div className="security-left">
-                  <div className="security-title">登录密码</div>
-                  <div className="security-desc">定期更换密码可以提高账号安全性</div>
-                </div>
-                <div className="security-right">
-                  <Button type="link" onClick={handleChangePassword}>
-                    修改
-                  </Button>
-                </div>
-              </SecurityItem>
-              <SecurityItem>
-                <div className="security-left">
-                  <div className="security-title">两步验证</div>
-                  <div className="security-desc">未开启</div>
-                </div>
-                <div className="security-right">
-                  <Button type="link">
-                    设置
-                  </Button>
-                </div>
-              </SecurityItem>
-            </InfoCard>
             <InfoCard
               title="岗位管理"
               extra={(
