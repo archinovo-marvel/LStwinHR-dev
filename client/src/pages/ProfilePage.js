@@ -212,7 +212,6 @@ const DangerButton = styled(Button)`
   border: 1px solid ${colors.danger};
   color: ${colors.danger};
   background: ${colors.cardBg};
-  margin-top: 12px;
 
   &:hover {
     border-color: ${colors.danger};
