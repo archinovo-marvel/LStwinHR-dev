@@ -435,13 +435,6 @@ const HomePage = () => {
 
   const features = [
     {
-      icon: <MessageOutlined />,
-      title: '智能对话',
-      description: '支持语音和文字交互，提供专业的HR咨询服务，快速解答招聘相关问题',
-      color: 'blue',
-      route: '/chat'
-    },
-    {
       icon: <FileTextOutlined />,
       title: '简历初筛',
       description: '从愿不愿、能不能、合不合三个维度深度分析候选人，生成专业报告',
