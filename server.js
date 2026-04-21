@@ -32,7 +32,14 @@ const {
   getPositionByName,
   upsertPositionForUser,
   deletePositionById,
-  buildResumePointer
+  buildResumePointer,
+  getCurrentInterviewSessionForUser,
+  listInterviewSessionsForUser,
+  getInterviewSessionById,
+  createInterviewSessionForUser,
+  upsertInterviewSessionForUser,
+  deleteInterviewSessionById,
+  deleteTemporaryInterviewSessionsForUser
 } = require('./services/candidateStore');
 require('dotenv').config();
 const { 
@@ -1515,6 +1522,18 @@ app.use('/api', candidateRouter);
 const { createChatRouter } = require('./routes/chat.routes');
 app.use('/api', createChatRouter());
 
+// 挂载面试会话路由
+const { createInterviewSessionRouter } = require('./routes/interviewSessionRoutes');
+app.use('/api', createInterviewSessionRouter({
+  authMiddleware,
+  getCurrentInterviewSessionForUser,
+  listInterviewSessionsForUser,
+  createInterviewSessionForUser,
+  upsertInterviewSessionForUser,
+  deleteInterviewSessionById,
+  deleteTemporaryInterviewSessionsForUser
+}));
+
 // 测试数据库连接
 testConnection();
 
@@ -1637,167 +1656,6 @@ app.post('/api/candidates/interview-score', express.json(), async (req, res) => 
 
 // 简历下载端点已移至 routes/candidateRoutes.js
 // 聊天路由已移至 routes/chat.routes.js
-
-// 简单的测试下载端点
-app.get('/api/test-download', (req, res) => {
-  try {
-    const testContent = `招聘灵犀 - 测试文件
-
-========================================
-
-这是一个测试下载文件，用于验证下载功能是否正常工作。
-
-测试信息:
-- 文件名: test.txt
-- 生成时间: ${new Date().toLocaleString('zh-CN')}
-- 状态: 正常
-
-如果您能看到这个文件内容，说明下载功能工作正常。
-
-========================================
-招聘灵犀`;
-    
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="test.txt"');
-    res.setHeader('Content-Length', Buffer.byteLength(testContent, 'utf8'));
-    
-    res.send(Buffer.from(testContent, 'utf8'));
-    console.log('测试文本下载成功');
-  } catch (error) {
-    console.error('测试下载失败:', error);
-    res.status(500).send('测试下载失败');
-  }
-});
-
-// 测试文件上传端点
-app.post('/api/test-upload', upload.single('testFile'), (req, res) => {
-  try {
-    console.log('测试文件上传请求:', req.body);
-    console.log('测试上传的文件:', req.file);
-    
-    if (req.file) {
-      res.json({
-        success: true,
-        message: '文件上传成功',
-        file: {
-          originalname: req.file.originalname,
-          filename: req.file.filename,
-          path: req.file.path,
-          size: req.file.size
-        }
-      });
-    } else {
-      res.json({
-        success: false,
-        message: '没有文件上传'
-      });
-    }
-  } catch (error) {
-    console.error('测试上传失败:', error);
-    res.status(500).json({ error: '测试上传失败' });
-  }
-});
-
-// 简单的文件上传测试页面
-app.get('/api/upload-test', (req, res) => {
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>文件上传测试</title>
-    <meta charset="utf-8">
-</head>
-<body>
-    <h1>文件上传功能测试</h1>
-    <form id="uploadForm" enctype="multipart/form-data">
-        <p>
-            <label>选择文件:</label><br>
-            <input type="file" id="fileInput" name="testFile" accept=".pdf,.doc,.docx" required>
-        </p>
-        <p>
-            <button type="submit">上传测试</button>
-        </p>
-    </form>
-    
-    <div id="result" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc;"></div>
-
-    <script>
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
-            const resultDiv = document.getElementById('result');
-            
-            if (!file) {
-                resultDiv.innerHTML = '<p style="color: red;">请选择文件</p>';
-                return;
-            }
-            
-            resultDiv.innerHTML = '<p>正在上传...</p>';
-            
-            const formData = new FormData();
-            formData.append('testFile', file);
-            
-            try {
-                const response = await fetch('/api/test-upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                resultDiv.innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
-            } catch (error) {
-                resultDiv.innerHTML = '<p style="color: red;">错误: ' + error.message + '</p>';
-            }
-        });
-    </script>
-</body>
-</html>`;
-  
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
-});
-
-// 生成简历PDF内容（模拟）
-function generateResumePDF(candidate) {
-  // 清理候选人数据，避免特殊字符导致PDF格式错误
-  const cleanName = (candidate.name || '未知').replace(/[()]/g, '');
-  const cleanPosition = (candidate.position || '未知').replace(/[()]/g, '');
-  const cleanPhone = (candidate.phone || '未知').replace(/[()]/g, '');
-  const cleanEmail = (candidate.email || '未知').replace(/[()]/g, '');
-  const cleanMbti = (candidate.mbti || '未完成').replace(/[()]/g, '');
-  const cleanScore = candidate.matchScore || 0;
-  const cleanRecommendation = (candidate.recommendation || '暂无').replace(/[()]/g, '').substring(0, 50);
-  
-  // 创建一个简单的文本格式简历，而不是PDF
-  const resumeText = `
-招聘灵犀 - 候选人简历
-
-========================================
-
-基本信息
-----------------------------------------
-姓名: ${cleanName}
-应聘职位: ${cleanPosition}
-联系电话: ${cleanPhone}
-邮箱地址: ${cleanEmail}
-MBTI类型: ${cleanMbti}
-
-匹配分析
-----------------------------------------
-匹配度: ${cleanScore}%
-推荐理由: ${cleanRecommendation}
-
-生成时间: ${new Date().toLocaleString('zh-CN')}
-
-========================================
-招聘灵犀
-`;
-
-  // 返回纯文本内容，让浏览器以文本形式显示
-  return resumeText;
-}
 
 // 添加候选人数据
 app.post('/api/candidates', upload.single('resume'), async (req, res) => {
@@ -2061,104 +1919,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// OCR对比测试API
-app.post('/api/test-ocr-comparison', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: '请上传图片文件' });
-    }
-
-    const buffer = req.file.buffer;
-    const originalName = req.file.originalname || 'test.jpg';
-
-    console.log(`[OCR测试] 收到文件: ${originalName}, 大小: ${buffer.length}`);
-
-    // 动态导入parserService中的OCR函数
-    const parserModule = require('./services/resume/parserService');
-
-    // 运行Tesseract OCR
-    console.log('[OCR测试] 开始Tesseract OCR...');
-    const tesseractStart = Date.now();
-    let tesseractResult = { text: '', elapsed: 0, error: null };
-    try {
-      const result = await parserModule.runNativeTesseractOCR(buffer, originalName);
-      tesseractResult.text = result.text || '';
-      tesseractResult.elapsed = Date.now() - tesseractStart;
-      console.log(`[OCR测试] Tesseract完成，耗时: ${tesseractResult.elapsed}ms，长度: ${tesseractResult.text.length}`);
-    } catch (e) {
-      tesseractResult.error = e.message;
-      tesseractResult.elapsed = Date.now() - tesseractStart;
-      console.log(`[OCR测试] Tesseract失败: ${e.message}`);
-    }
-
-    // 运行VL OCR
-    console.log('[OCR测试] 开始VL OCR...');
-    const vlStart = Date.now();
-    let vlResult = { text: '', elapsed: 0, error: null };
-    try {
-      const result = await parserModule.runVLOCR(buffer, originalName, false, {});
-      vlResult.text = result.text || '';
-      vlResult.elapsed = Date.now() - vlStart;
-      console.log(`[OCR测试] VL OCR完成，耗时: ${vlResult.elapsed}ms，长度: ${vlResult.text.length}`);
-    } catch (e) {
-      vlResult.error = e.message;
-      vlResult.elapsed = Date.now() - vlStart;
-      console.log(`[OCR测试] VL OCR失败: ${e.message}`);
-    }
-
-    // 计算评分
-    const tesseractQuality = parserModule.scoreOCRTextQuality ?
-      parserModule.scoreOCRTextQuality(tesseractResult.text) :
-      { score: tesseractResult.text.length, length: tesseractResult.text.length };
-
-    const vlQuality = parserModule.scoreOCRTextQuality ?
-      parserModule.scoreOCRTextQuality(vlResult.text) :
-      { score: vlResult.text.length, length: vlResult.text.length };
-
-    // 融合结果
-    const fusedResult = parserModule.fuseOCRResults ?
-      parserModule.fuseOCRResults(tesseractResult, vlResult) :
-      { text: tesseractResult.text || vlResult.text, parser: 'fallback', preferredSource: 'unknown' };
-
-    res.json({
-      success: true,
-      fileName: originalName,
-      fileSize: buffer.length,
-      tesseract: {
-        text: tesseractResult.text,
-        elapsed: tesseractResult.elapsed,
-        error: tesseractResult.error,
-        quality: tesseractQuality
-      },
-      vl: {
-        text: vlResult.text,
-        elapsed: vlResult.elapsed,
-        error: vlResult.error,
-        quality: vlQuality
-      },
-      fused: {
-        text: fusedResult.text,
-        parser: fusedResult.parser,
-        preferredSource: fusedResult.preferredSource,
-        quality: fusedResult.quality
-      }
-    });
-  } catch (error) {
-    console.error('OCR测试失败:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 app.listen(PORT, () => {
   console.log(`数据服务器运行在 http://localhost:${PORT}`);
-  console.log(`API端点:`);
-  console.log(`  GET  /api/candidates - 获取所有候选人数据`);
-  console.log(`  POST /api/candidates - 添加候选人数据`);
-  console.log(`  DELETE /api/candidates/:id - 删除指定候选人`);
-  console.log(`  DELETE /api/candidates - 清空所有数据`);
-  console.log(`  GET  /api/download-resume/:id - 下载简历文件`);
-  console.log(`  GET  /api/test-download - 测试下载功能`);
-  console.log(`  GET  /api/upload-test - 文件上传测试页面`);
-  console.log(`  POST /api/test-upload - 文件上传测试API`);
-  console.log(`  GET  /api/health - 健康检查`);
 });
