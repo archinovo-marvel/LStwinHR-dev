@@ -90,14 +90,14 @@ const StyledPasswordInput = styled(Input.Password)`
     box-shadow: 0 0 0 3px ${colors.primaryLight};
   }
   &::placeholder {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
   .ant-input-prefix {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     margin-right: 10px;
   }
   .ant-input-suffix {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -126,10 +126,10 @@ const CodeInput = styled(Input)`
     box-shadow: 0 0 0 3px ${colors.primaryLight};
   }
   &::placeholder {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
   .ant-input-prefix {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     margin-right: 10px;
   }
 `;
@@ -149,7 +149,7 @@ const CodeButton = styled(Button)`
   }
   &:disabled {
     border-color: ${colors.border};
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     background: transparent;
   }
 `;
@@ -219,7 +219,7 @@ const DividerLine = styled.div`
   span {
     padding: 0 16px;
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     white-space: nowrap;
   }
 `;
@@ -281,7 +281,7 @@ const CheckingIndicator = styled.div`
   margin-bottom: 8px;
   padding-left: 14px;
   font-size: 12px;
-  color: ${colors.muted};
+  color: ${colors.textMuted};
 `;
 
 // 验证状态图标样式

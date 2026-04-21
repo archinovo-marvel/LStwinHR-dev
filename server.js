@@ -138,16 +138,16 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // JWT密钥
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_change_this_in_production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // 邮件配置
 const emailTransporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.exmail.qq.com',
+  host: process.env.EMAIL_HOST,
   port: parseInt(process.env.EMAIL_PORT) || 465,
   secure: process.env.EMAIL_SECURE !== 'false',
   auth: {
-    user: process.env.EMAIL_USER || 'gaolu@lstwin.top',
-    pass: process.env.EMAIL_PASSWORD || 'EpZqKtR6bFjB3g2o'
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
   },
   connectionTimeout: 10000,
   socketTimeout: 10000,
@@ -1489,8 +1489,8 @@ const authRouter = createAuthRouter({
   authMiddleware,
   createPublicSubmissionToken: () => null,
   ensureCandidateDatabase,
-  emailFromName: process.env.EMAIL_FROM_NAME || '孛数AI面试系统',
-  emailFromAddress: process.env.EMAIL_FROM_ADDRESS || 'gaolu@lstwin.top'
+  emailFromName: process.env.EMAIL_FROM_NAME,
+  emailFromAddress: process.env.EMAIL_FROM_ADDRESS
 });
 app.use('/api', authRouter);
 

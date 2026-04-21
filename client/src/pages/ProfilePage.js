@@ -134,12 +134,12 @@ const ContactItem = styled.div`
   
   .anticon {
     font-size: 16px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
   
   .label {
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     min-width: 60px;
   }
   
@@ -248,7 +248,7 @@ const StatCard = styled(Card)`
   
   .stat-label {
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -292,7 +292,7 @@ const InfoItem = styled.div`
   display: contents;
   
   .label {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     font-size: 13px;
     display: flex;
     align-items: center;
@@ -335,7 +335,7 @@ const SecurityItem = styled.div`
     
     .security-desc {
       font-size: 13px;
-      color: ${colors.muted};
+      color: ${colors.textMuted};
     }
   }
   
@@ -432,7 +432,7 @@ const ModalPasswordInput = styled(Input.Password)`
 
   .ant-input-prefix {
     margin-right: 8px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     display: flex;
     align-items: center;
   }
@@ -504,7 +504,7 @@ const PositionList = styled.div`
 `;
 
 const EmptyPositionsText = styled.div`
-  color: ${colors.muted};
+  color: ${colors.textMuted};
   font-size: 14px;
   line-height: 1.8;
   padding: 4px 0;
@@ -876,7 +876,7 @@ const ProfilePage = () => {
           <div style={{ color: colors.title, fontSize: 24, fontWeight: 700, marginBottom: 10 }}>删除岗位</div>
           <div style={{ color: colors.text, fontSize: 14, lineHeight: 1.8, marginBottom: 16 }}>删除后，该岗位的配置将无法继续用于新的简历分析，请确认是否继续。</div>
           <div style={{ padding: '14px 16px', borderRadius: 16, background: '#f8fbff', border: '1px solid rgba(226, 232, 240, 0.9)' }}>
-            <div style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>岗位名称</div>
+            <div style={{ color: colors.textMuted, fontSize: 12, marginBottom: 6 }}>岗位名称</div>
             <div style={{ color: colors.title, fontSize: 15, fontWeight: 600 }}>{position.name}</div>
           </div>
         </div>

@@ -63,7 +63,7 @@ const PageHeader = styled.div`
   
   .subtitle {
     font-size: 14px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -113,7 +113,7 @@ const StepsContainer = styled.div`
     }
     
     .ant-steps-item-wait .ant-steps-item-title {
-      color: ${colors.muted};
+      color: ${colors.textMuted};
     }
   }
 `;
@@ -136,7 +136,7 @@ const StepTitle = styled.div`
   
   .step-subtitle {
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -207,7 +207,7 @@ const MBTIOptionCard = styled.div`
   
   .option-desc {
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -300,7 +300,7 @@ const UploadBox = styled.div`
   
   .upload-hint {
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -363,7 +363,7 @@ const MatchScore = styled.div`
   
   .score-label {
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -949,7 +949,7 @@ const CandidateForm = () => {
                   status="active"
                   strokeColor={colors.primary}
                 />
-                <Text style={{ display: 'block', textAlign: 'center', marginTop: '8px', color: colors.muted }}>
+                <Text style={{ display: 'block', textAlign: 'center', marginTop: '8px', color: colors.textMuted }}>
                   已完成 {Object.keys(mbtiAnswers).length} / {mbtiQuestions.length} 题
                 </Text>
               </div>
@@ -989,7 +989,7 @@ const CandidateForm = () => {
             <MBTIQuestionCard>
               <Title level={4} style={{ marginBottom: '16px', color: colors.title }}>直接输入MBTI类型</Title>
               <div style={{ marginBottom: '16px' }}>
-                <Text type="secondary" style={{ color: colors.muted }}>
+                <Text type="secondary" style={{ color: colors.textMuted }}>
                   请输入你的MBTI类型（如：INTJ、ENFP、ISTJ等）
                 </Text>
               </div>
@@ -1083,7 +1083,7 @@ const CandidateForm = () => {
             <SuccessDesc style={{ marginBottom: '16px' }}>
               系统正在分析您的信息
             </SuccessDesc>
-            <Text style={{ display: 'block', color: colors.muted, fontSize: '14px', marginBottom: '40px' }}>
+            <Text style={{ display: 'block', color: colors.textMuted, fontSize: '14px', marginBottom: '40px' }}>
               HR将尽快与您联系
             </Text>
             <PrimaryButton 

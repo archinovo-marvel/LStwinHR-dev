@@ -165,7 +165,7 @@ const DividerLine = styled.div`
   span {
     padding: 0 16px;
     font-size: 13px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
@@ -219,7 +219,7 @@ const ModalInput = styled(Input)`
   }
   
   .ant-input-prefix {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     margin-right: 10px;
   }
 `;
@@ -236,7 +236,7 @@ const ModalPasswordInput = styled(Input.Password)`
   }
   
   .ant-input-prefix {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
     margin-right: 10px;
   }
 `;
