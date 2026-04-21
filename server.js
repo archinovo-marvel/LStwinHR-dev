@@ -1106,6 +1106,19 @@ app.use('/api', createInterviewSessionRouter({
 // 挂载讯飞路由
 app.use('/api', require('./routes/xunfei.routes'));
 
+// AI面试评分端点
+const interviewAnalysisService = require('./services/interviewAnalysisService');
+
+app.post('/api/interview/analyze', async (req, res) => {
+  try {
+    const result = await interviewAnalysisService.evaluateInterview(req.body);
+    res.json(result);
+  } catch (e) {
+    console.error('AI评分失败:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 测试数据库连接
 testConnection();
 

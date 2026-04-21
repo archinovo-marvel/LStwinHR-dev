@@ -185,6 +185,42 @@ class InterviewScoring {
     return this.analyzeInterviewConversation(conversationData);
   }
 
+  // AI评分（调用后端评分服务）
+  async analyzeWithAI(conversationData) {
+    try {
+      const response = await fetch('/api/interview/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questions: conversationData.questions,
+          candidateAnswers: conversationData.candidateAnswers
+        })
+      });
+      if (!response.ok) throw new Error('AI评分请求失败');
+      const result = await response.json();
+
+      // 转换格式以兼容现有结构
+      const avgScore = result.totalScore;
+      return {
+        totalScore: result.totalScore,
+        categoryScores: {
+          answerQuality: { score: avgScore * 0.4, rawScore: avgScore / 2.5 },
+          communication: { score: avgScore * 0.25, rawScore: avgScore / 4 },
+          professionalism: { score: avgScore * 0.2, rawScore: avgScore / 5 },
+          attitude: { score: avgScore * 0.15, rawScore: avgScore / 6.67 }
+        },
+        questionScores: result.questionScores,
+        summary: result.summary,
+        strengths: [],
+        weaknesses: [],
+        aiEvaluated: true
+      };
+    } catch (e) {
+      console.warn('AI评分降级到规则评分:', e.message);
+      return this.analyzeInterviewConversation(conversationData);
+    }
+  }
+
   // 分析面试对话记录
   analyzeInterviewConversation(conversationData) {
     // 注意：conversationData 可能来自不同页面/存储结构，务必做输入规范化。
