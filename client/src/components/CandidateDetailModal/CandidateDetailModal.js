@@ -682,6 +682,47 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
           </section>
         )}
 
+        {/* AI面试评分 */}
+        {!isAnalyzing && candidate.interviewDetails && candidate.interviewDetails.questionScores && candidate.interviewDetails.questionScores.length > 0 && (
+          <section className="candidate-detail-card candidate-detail-ai-scores">
+            <div className="candidate-detail-card-header">
+              <div className="candidate-detail-card-title">
+                <BulbOutlined /> AI面试评分
+              </div>
+              <div className="ai-total-score">
+                总分: <span style={{ color: SCORE_COLOR(candidate.interviewDetails.totalScore) }}>{candidate.interviewDetails.totalScore}</span>
+              </div>
+            </div>
+            <div className="interview-analysis-section">
+              {candidate.interviewDetails.questionScores.map((q, i) => (
+                <div key={i} className="question-score-item">
+                  <div className="question-score-header">
+                    <span className="question-index">Q{i + 1}</span>
+                    <span className="question-text">{q.question}</span>
+                  </div>
+                  <div className="question-score-answer">
+                    <Text type="secondary" style={{ fontSize: 12 }}>回答:</Text>
+                    <span className="answer-text">{q.answer || '-'}</span>
+                  </div>
+                  <div className="score-details">
+                    <span className="score-item"><Text type="secondary">相关性:</Text> {q.relevance}</span>
+                    <span className="score-item"><Text type="secondary">深度:</Text> {q.depth}</span>
+                    <span className="score-item"><Text type="secondary">清晰:</Text> {q.clarity}</span>
+                    <span className="score-item"><Text type="secondary">完整:</Text> {q.completeness}</span>
+                  </div>
+                  {q.comment && <div className="question-comment">{q.comment}</div>}
+                </div>
+              ))}
+              {candidate.interviewDetails.summary && (
+                <div className="interview-summary">
+                  <Text strong style={{ fontSize: 13, color: '#1a2a3f' }}>整体评价:</Text>
+                  <div className="summary-text">{candidate.interviewDetails.summary}</div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {onRefreshAnalysis && (
           <div className="candidate-detail-actions">
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
