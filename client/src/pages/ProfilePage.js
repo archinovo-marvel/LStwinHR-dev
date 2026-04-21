@@ -24,44 +24,29 @@ import { getCandidateStats } from '../utils/candidateStats';
 
 const { Title, Text, Paragraph } = Typography;
 
-// 主色调定义
-const colors = {
-  primary: '#2F80ED',
-  primaryHover: '#1C5FD4',
-  primaryLight: '#E8F2FF',
-  background: '#F7F9FC',
-  cardBg: '#FFFFFF',
-  title: '#1F2D3D',
-  text: '#4A5568',
-  muted: '#94A3B8',
-  border: '#E2E8F0',
-  divider: '#EEF2F7',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-};
+import { colors } from '../../theme/colors';
 
 // 页面容器
 const PageContainer = styled.div`
-  padding: 24px;
+  padding: 120px 32px 32px;
   background: ${colors.background};
   min-height: 100vh;
 `;
 
 // 页面标题
-const PageTitle = styled.div`
-  margin-bottom: 24px;
-  
-  .title {
-    font-size: 24px;
-    font-weight: 600;
-    color: ${colors.title};
-    margin-bottom: 8px;
-  }
-  
+const PageTitle = styled.h1`
+  font-family: 'Noto Serif SC', Georgia, serif;
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 400;
+  color: ${colors.text};
+  margin: 0 0 16px 0;
+  line-height: 1.2;
+
   .subtitle {
     font-size: 14px;
-    color: ${colors.muted};
+    color: ${colors.textMuted};
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 400;
   }
 `;
 
@@ -91,7 +76,7 @@ const UserCard = styled(Card)`
 // 用户信息头部
 const UserHeader = styled.div`
   padding: 32px 24px;
-  background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+  background: linear-gradient(135deg, #4A9ECF 0%, #2C5A7D 100%);
   text-align: center;
 `;
 
@@ -178,29 +163,33 @@ const ButtonGroup = styled.div`
 // 主按钮
 const PrimaryButton = styled(Button)`
   height: 40px;
-  border-radius: 10px;
-  font-weight: 500;
+  border-radius: 8px;
+  font-weight: 400;
+  font-size: 14px;
   background: ${colors.primary};
   border-color: ${colors.primary};
-  
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+
   &:hover {
-    background: ${colors.primaryHover};
-    border-color: ${colors.primaryHover};
+    background: ${colors.highlight} !important;
+    border-color: ${colors.highlight} !important;
   }
 `;
 
 // 次按钮
 const SecondaryButton = styled(Button)`
   height: 40px;
-  border-radius: 10px;
-  font-weight: 500;
+  border-radius: 8px;
+  font-weight: 400;
+  font-size: 14px;
   border: 1px solid ${colors.border};
   color: ${colors.text};
   background: ${colors.cardBg};
+  transition: all 0.25s ease;
 
   &:hover {
-    border-color: ${colors.primary};
-    color: ${colors.primary};
+    border-color: ${colors.highlight};
+    color: ${colors.highlight};
   }
 `;
 
@@ -458,30 +447,34 @@ const ModalPasswordInput = styled(Input.Password)`
 // 弹窗按钮
 const ModalPrimaryButton = styled(Button)`
   height: 40px;
-  border-radius: 10px;
-  font-weight: 500;
+  border-radius: 8px;
+  font-weight: 400;
+  font-size: 14px;
   background: ${colors.primary};
   border-color: ${colors.primary};
   padding: 0 24px;
-  
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+
   &:hover {
-    background: ${colors.primaryHover};
-    border-color: ${colors.primaryHover};
+    background: ${colors.highlight} !important;
+    border-color: ${colors.highlight} !important;
   }
 `;
 
 const ModalSecondaryButton = styled(Button)`
   height: 40px;
-  border-radius: 10px;
-  font-weight: 500;
+  border-radius: 8px;
+  font-weight: 400;
+  font-size: 14px;
   border: 1px solid ${colors.border};
   color: ${colors.text};
   background: ${colors.cardBg};
   padding: 0 24px;
-  
+  transition: all 0.25s ease;
+
   &:hover {
-    border-color: ${colors.primary};
-    color: ${colors.primary};
+    border-color: ${colors.highlight};
+    color: ${colors.highlight};
   }
 `;
 
@@ -496,7 +489,7 @@ const AvatarWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   padding: 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4A9ECF 0%, #2C5A7D 100%);
   border-radius: 16px 16px 0 0;
 `;
 
@@ -521,7 +514,7 @@ const PositionItem = styled.div`
   border: 1px solid ${colors.border};
   border-radius: 20px;
   padding: 20px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #F8FAFC 100%);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
 
   .position-head {
@@ -560,7 +553,7 @@ const PositionToolbarButton = styled(Button)`
     padding: 0 18px;
     font-weight: 600;
     border: none;
-    background: linear-gradient(135deg, ${colors.primary} 0%, #5b8def 100%);
+    background: linear-gradient(135deg, ${colors.highlight} 0%, #7A6548 100%);
     box-shadow: 0 12px 24px rgba(47, 128, 237, 0.22);
   }
 
@@ -599,17 +592,17 @@ const PositionDeleteButton = styled(Button)`
     height: 34px;
     border-radius: 12px;
     padding: 0 14px;
-    border: 1px solid rgba(239, 68, 68, 0.14);
-    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid ${colors.danger};
+    background: #FFFFFF;
     color: ${colors.danger};
     font-weight: 600;
     box-shadow: none;
   }
 
   &&:hover {
-    border-color: rgba(239, 68, 68, 0.24);
-    background: rgba(239, 68, 68, 0.1);
-    color: #dc2626;
+    border-color: ${colors.danger};
+    background: ${colors.danger};
+    color: #FFFFFF;
   }
 `;
 
@@ -617,7 +610,7 @@ const ModalHero = styled.div`
   padding: 22px 24px;
   margin-bottom: 22px;
   border-radius: 24px;
-  background: linear-gradient(145deg, rgba(47, 128, 237, 0.14), rgba(99, 102, 241, 0.08));
+  background: linear-gradient(145deg, rgba(139, 115, 85, 0.14), rgba(107, 91, 74, 0.08));
   border: 1px solid rgba(47, 128, 237, 0.12);
 `;
 
@@ -664,7 +657,7 @@ const ModalTextArea = styled(Input.TextArea)`
 const PositionFormPanel = styled.div`
   padding: 22px;
   border-radius: 22px;
-  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #F8FAFC 100%);
   border: 1px solid rgba(226, 232, 240, 0.9);
 
   .ant-form-item-label > label {
@@ -1021,7 +1014,7 @@ const ProfilePage = () => {
         transition={{ duration: 0.5 }}
       >
         <PageTitle>
-          <div className="title">个人资料</div>
+          个人资料
           <div className="subtitle">管理您的个人信息和账户设置</div>
         </PageTitle>
         <MainLayout>
@@ -1156,7 +1149,7 @@ const ProfilePage = () => {
                         </div>
                         <PositionActionGroup>
                           <PositionEditButton size="small" icon={<EditOutlined />} onClick={() => openPositionModal(position)}>编辑</PositionEditButton>
-                          <PositionDeleteButton size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeletePosition(position)}>删除</PositionDeleteButton>
+                          <PositionDeleteButton size="small" icon={<DeleteOutlined />} onClick={() => confirmDeletePosition(position)}>删除</PositionDeleteButton>
                         </PositionActionGroup>
                       </div>
                       {(position.config?.coreSkills || []).length > 0 ? (

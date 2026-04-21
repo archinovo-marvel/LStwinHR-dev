@@ -5,19 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../context/AuthContext';
 
-// 主色调定义
-const colors = {
-  primary: '#2F80ED',
-  primaryHover: '#1C5FD4',
-  primaryLight: '#E8F2FF',
-  background: '#F7F9FC',
-  cardBg: '#FFFFFF',
-  title: '#1F2D3D',
-  text: '#4A5568',
-  muted: '#94A3B8',
-  border: '#E2E8F0',
-  divider: '#EEF2F7',
-};
+import { colors } from '../../theme/colors';
 
 // 表单容器 - 确保所有元素宽度一致
 const FormWrapper = styled.div`
@@ -49,87 +37,93 @@ const StyledForm = styled(Form)`
 // 输入框统一样式 - 宽度100%
 const StyledInput = styled(Input)`
   width: 100%;
-  height: 44px;
-  border-radius: 10px;
+  height: 48px;
+  border-radius: 8px;
   border: 1px solid ${colors.border};
-  padding: 0 14px;
+  padding: 0 16px;
   font-size: 14px;
-  transition: all 0.2s ease;
-  
+  transition: all 0.25s ease;
+  background: ${colors.cardBg};
+
   &:hover {
-    border-color: ${colors.primary};
+    border-color: ${colors.highlight};
   }
-  
+
   &:focus,
   &.ant-input-focused {
-    border-color: ${colors.primary};
-    box-shadow: 0 0 0 3px ${colors.primaryLight};
+    border-color: ${colors.highlight};
+    box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.1);
   }
-  
+
   &::placeholder {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
-  
+
   .ant-input-prefix {
-    color: ${colors.muted};
-    margin-right: 10px;
+    color: ${colors.textMuted};
+    margin-right: 12px;
   }
 `;
 
 const StyledPasswordInput = styled(Input.Password)`
   width: 100%;
-  height: 44px;
-  border-radius: 10px;
+  height: 48px;
+  border-radius: 8px;
   border: 1px solid ${colors.border};
-  padding: 0 14px;
+  padding: 0 16px;
   font-size: 14px;
-  transition: all 0.2s ease;
-  
+  transition: all 0.25s ease;
+  background: ${colors.cardBg};
+
   &:hover {
-    border-color: ${colors.primary};
+    border-color: ${colors.highlight};
   }
-  
+
   &:focus,
   &.ant-input-focused {
-    border-color: ${colors.primary};
-    box-shadow: 0 0 0 3px ${colors.primaryLight};
+    border-color: ${colors.highlight};
+    box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.1);
   }
-  
+
   &::placeholder {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
-  
+
   .ant-input-prefix {
-    color: ${colors.muted};
-    margin-right: 10px;
+    color: ${colors.textMuted};
+    margin-right: 12px;
   }
-  
+
   .ant-input-suffix {
-    color: ${colors.muted};
+    color: ${colors.textMuted};
   }
 `;
 
 // 主按钮 - 宽度100%与输入框对齐
 const PrimaryButton = styled(Button)`
   width: 100%;
-  height: 44px;
-  border-radius: 10px;
-  font-weight: 500;
-  font-size: 15px;
+  height: 48px;
+  border-radius: 8px;
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: 0.05em;
   background: ${colors.primary};
   border-color: ${colors.primary};
-  box-shadow: 0 4px 12px rgba(47, 128, 237, 0.25);
-  transition: all 0.2s ease;
-  
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+
   &:hover {
-    background: ${colors.primaryHover};
-    border-color: ${colors.primaryHover};
+    background: ${colors.highlight} !important;
+    border-color: ${colors.highlight} !important;
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(47, 128, 237, 0.35);
   }
-  
+
   &:active {
     transform: translateY(0);
+  }
+
+  &:disabled {
+    background: ${colors.border};
+    border-color: ${colors.border};
   }
 `;
 
@@ -144,11 +138,12 @@ const FormRow = styled.div`
 
 const ForgotLink = styled.a`
   font-size: 13px;
-  color: ${colors.primary};
+  color: ${colors.textMuted};
   cursor: pointer;
-  
+  transition: color 0.2s ease;
+
   &:hover {
-    color: ${colors.primaryHover};
+    color: ${colors.text};
   }
 `;
 
@@ -178,16 +173,35 @@ const DividerLine = styled.div`
 const RegisterLink = styled.div`
   text-align: center;
   font-size: 14px;
-  color: ${colors.text};
+  color: ${colors.textMuted};
   width: 100%;
-  
+
   a {
-    color: ${colors.primary};
-    font-weight: 500;
+    color: ${colors.text};
+    font-weight: 400;
     margin-left: 4px;
-    
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: ${colors.accent};
+      transform: scaleX(0);
+      transform-origin: right;
+      transition: transform 0.3s ease;
+    }
+
     &:hover {
-      color: ${colors.primaryHover};
+      color: ${colors.text};
+    }
+
+    &:hover::after {
+      transform: scaleX(1);
+      transform-origin: left;
     }
   }
 `;
@@ -229,9 +243,23 @@ const ModalPasswordInput = styled(Input.Password)`
 
 const CodeButton = styled(Button)`
   height: 44px;
-  border-radius: 10px;
+  border-radius: 8px;
   min-width: 110px;
-  font-weight: 500;
+  font-weight: 400;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid ${colors.border};
+  color: ${colors.text};
+
+  &:hover {
+    background: ${colors.highlight} !important;
+    border-color: ${colors.highlight} !important;
+    color: #FFFFFF !important;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
 `;
 
 const LoginForm = () => {
@@ -326,26 +354,31 @@ const LoginForm = () => {
 
   const onFinish = async (values) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ username: values.username, password: values.password }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
         message.success('登录成功');
-        login({ 
+        login({
           id: data.user.id,
-          name: data.user.name, 
+          name: data.user.name,
           email: data.user.email,
           phone: data.user.phone,
           role: data.user.role,
-          token: data.token 
+          token: data.token
         });
-        navigate('/');
+        navigate('/dashboard');
       } else {
         const errorData = await response.json();
         console.error('Login failed:', errorData.message);
@@ -353,7 +386,11 @@ const LoginForm = () => {
       }
     } catch (error) {
       console.error('An error occurred during login:', error);
-      message.error('登录请求发生错误，请稍后重试');
+      if (error.name === 'AbortError') {
+        message.error('登录请求超时，请稍后重试');
+      } else {
+        message.error('登录请求发生错误，请稍后重试');
+      }
     }
   };
 

@@ -1,628 +1,201 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Button, Typography } from 'antd';
-import {
-  RocketOutlined,
-  RobotOutlined,
-  FileTextOutlined,
-  TeamOutlined,
-  ArrowRightOutlined,
-  ThunderboltOutlined,
-  RiseOutlined
-} from '@ant-design/icons';
+import React from 'react';
 import { motion } from 'framer-motion';
 import styled from 'styled-components';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import LoginPromptModal from '../components/LoginPromptModal';
-import { getCandidateStats } from '../utils/candidateStats';
 
-const { Title, Paragraph } = Typography;
+import { colors } from '../../theme/colors';
 
-// 主色调定义
-const colors = {
-  primary: '#2F80ED',
-  primaryHover: '#1C5FD4',
-  primaryLight: '#E8F2FF',
-  background: '#F7F9FC',
-  cardBg: '#FFFFFF',
-  title: '#1F2D3D',
-  text: '#4A5568',
-  muted: '#94A3B8',
-  border: '#E2E8F0',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-  purple: '#8B5CF6',
-  cyan: '#06B6D4'
-};
-
-// 页面容器
-const PageContainer = styled.div`
-  padding: 32px;
-  background: ${colors.background};
-  min-height: 100%;
+const PageWrapper = styled.div`
+  background: ${colors.bg};
+  min-height: 100vh;
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
 `;
 
-// Hero区域
-const HeroSection = styled.div`
-  background: linear-gradient(135deg, #F0F7FF 0%, #E8F4FD 50%, #F5F0FF 100%);
-  border-radius: 20px;
-  padding: 48px;
-  margin-bottom: 32px;
+const HeroSection = styled.section`
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 700px;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  position: relative;
-  overflow: hidden;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -10%;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(47, 128, 237, 0.08) 0%, transparent 70%);
-    border-radius: 50%;
-  }
-  
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: -30%;
-    left: 10%;
-    width: 300px;
-    height: 300px;
-    background: radial-gradient(circle, rgba(139, 92, 246, 0.06) 0%, transparent 70%);
-    border-radius: 50%;
-  }
+  justify-content: center;
 `;
 
-const HeroContent = styled.div`
-  flex: 1;
-  max-width: 520px;
+const HeroVideo = styled.video`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+`;
+
+const HeroOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(
+      ellipse 80% 80% at 50% 50%,
+      rgba(0, 0, 0, 0.15) 0%,
+      rgba(0, 0, 0, 0.5) 60%,
+      rgba(0, 0, 0, 0.85) 100%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 60%,
+      rgba(0, 0, 0, 0.3) 100%
+    );
   z-index: 1;
 `;
 
-const HeroTitle = styled(Title)`
-  && {
-    font-size: 36px;
-    font-weight: 700;
-    color: ${colors.title};
-    margin-bottom: 16px;
-    line-height: 1.3;
-    
-    .highlight {
-      background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.purple} 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-  }
+const HeroContent = styled.div`
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 900px;
 `;
 
-const HeroDesc = styled(Paragraph)`
-  && {
-    font-size: 16px;
-    color: ${colors.text};
-    line-height: 1.8;
-    margin-bottom: 28px;
-  }
+const HeroTitle = styled(motion.h1)`
+  font-family: 'Noto Serif SC', Georgia, serif;
+  font-size: clamp(56px, 9vw, 120px);
+  font-weight: 400;
+  color: #FFFFFF;
+  line-height: 1.05;
+  margin: 0 0 24px 0;
+  letter-spacing: -0.02em;
 `;
 
-const HeroButtons = styled.div`
-  display: flex;
+const HeroSubtitle = styled(motion.p)`
+  font-size: clamp(16px, 2vw, 20px);
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 48px 0;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+`;
+
+const HeroCTA = styled(motion.a)`
+  display: inline-flex;
+  align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
-`;
-
-const PrimaryButton = styled(Button)`
-  && {
-    height: 44px;
-    padding: 0 28px;
-    border-radius: 10px;
-    font-weight: 500;
-    font-size: 15px;
-    background: ${colors.primary};
-    border-color: ${colors.primary};
-    box-shadow: 0 4px 12px rgba(47, 128, 237, 0.25);
-    transition: all 0.2s ease;
-    
-    &:hover {
-      background: ${colors.primaryHover};
-      border-color: ${colors.primaryHover};
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(47, 128, 237, 0.35);
-    }
-  }
-`;
-
-const SecondaryButton = styled(Button)`
-  && {
-    height: 44px;
-    padding: 0 28px;
-    border-radius: 10px;
-    font-weight: 500;
-    font-size: 15px;
-    border: 1px solid ${colors.border};
-    color: ${colors.text};
-    background: ${colors.cardBg};
-    transition: all 0.2s ease;
-    
-    &:hover {
-      border-color: ${colors.primary};
-      color: ${colors.primary};
-      background: ${colors.primaryLight};
-    }
-  }
-`;
-
-// 统计卡片区域
-const StatsSection = styled.div`
-  margin-bottom: 32px;
-`;
-
-const SectionHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-`;
-
-const SectionTitle = styled(Title)`
-  && {
-    font-size: 18px;
-    font-weight: 600;
-    color: ${colors.title};
-    margin: 0;
-  }
-`;
-
-const StatCard = styled(Card)`
-  && {
-    border-radius: 16px;
-    border: 1px solid ${colors.border};
-    box-shadow: none;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    
-    &:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
-      border-color: ${colors.primary};
-    }
-    
-    .ant-card-body {
-      padding: 24px;
-    }
-  }
-`;
-
-const StatCardContent = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-`;
-
-const StatLeft = styled.div`
-  flex: 1;
-`;
-
-const StatLabel = styled.div`
   font-size: 14px;
-  color: ${colors.muted};
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-`;
+  color: #FFFFFF;
+  text-decoration: none;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  position: relative;
+  padding-bottom: 8px;
+  cursor: pointer;
 
-const StatValue = styled.div`
-  font-size: 32px;
-  font-weight: 700;
-  color: ${colors.title};
-  margin-bottom: 8px;
-  font-variant-numeric: tabular-nums;
-`;
-
-const StatIconWrapper = styled.div`
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  flex-shrink: 0;
-  
-  &.blue {
-    background: ${colors.primaryLight};
-    color: ${colors.primary};
-  }
-  
-  &.green {
-    background: #D1FAE5;
-    color: ${colors.success};
-  }
-  
-  &.orange {
-    background: #FEF3C7;
-    color: ${colors.warning};
-  }
-  
-  &.purple {
-    background: #EDE9FE;
-    color: ${colors.purple};
-  }
-`;
-
-// 功能卡片区域
-const FeaturesSection = styled.div`
-  margin-bottom: 32px;
-`;
-
-const FeatureCard = styled(Card)`
-  && {
-    border-radius: 16px;
-    border: 1px solid ${colors.border};
-    box-shadow: none;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    height: 100%;
-    
-    &:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
-      border-color: ${props => props.$hoverColor || colors.primary};
-      
-      .feature-icon {
-        transform: scale(1.1);
-      }
-      
-      .feature-arrow {
-        transform: translateX(4px);
-        opacity: 1;
-      }
-    }
-    
-    .ant-card-body {
-      padding: 24px;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-    }
-  }
-`;
-
-// 功能卡片Flex容器
-// 功能卡片容器：桌面端使用flex水平布局，移动端（≤768px）切换为垂直布局
-// eslint-disable-next-line no-unused-vars
-const FeaturesFlexContainer = styled.div`
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  justify-content: space-between;
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-    gap: 16px;
-  }
-`;
-
-// 功能卡片Flex项目
-// 功能卡片项目：弹性布局，基础宽度30%，响应式适配不同屏幕尺寸
-// eslint-disable-next-line no-unused-vars
-const FeatureFlexItem = styled.div`
-  flex: 1 1 30%; /* 基础30%，可拉伸填充 */
-  min-width: 280px;
-  max-width: 380px;
-
-  @media (max-width: 992px) {
-    flex: 1 1 45%;
-    max-width: none;
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: #FFFFFF;
+    transform-origin: right;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  @media (max-width: 768px) {
-    flex: 1 1 100%;
-    min-width: auto;
-  }
-`;
-
-const FeatureIcon = styled.div`
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  margin-bottom: 16px;
-  transition: transform 0.3s ease;
-  
-  &.blue {
-    background: ${colors.primaryLight};
-    color: ${colors.primary};
-  }
-  
-  &.green {
-    background: #D1FAE5;
-    color: ${colors.success};
-  }
-  
-  &.orange {
-    background: #FEF3C7;
-    color: ${colors.warning};
-  }
-  
-  &.purple {
-    background: #EDE9FE;
-    color: ${colors.purple};
-  }
-`;
-
-const FeatureTitle = styled(Title)`
-  && {
-    font-size: 16px;
-    font-weight: 600;
-    color: ${colors.title};
-    margin: 0 0 8px 0;
-  }
-`;
-
-const FeatureDesc = styled(Paragraph)`
-  && {
-    font-size: 14px;
-    color: ${colors.muted};
-    margin: 0 0 16px 0;
-    flex: 1;
-    line-height: 1.6;
-  }
-`;
-
-const FeatureAction = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: ${colors.primary};
-  
-  .feature-arrow {
-    transition: all 0.2s ease;
-    opacity: 0.6;
+  &:hover::after {
+    transform-origin: left;
+    transform: scaleX(0);
   }
 `;
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [loginPromptVisible, setLoginPromptVisible] = useState(false);
-  const [stats, setStats] = useState({
-    totalResumes: 0,
-    totalInterviews: 0,
-    totalCandidates: 0,
-    weeklyPassRate: 0
-  });
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const fetchStats = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setStats({
-          totalResumes: 0,
-          totalInterviews: 0,
-          totalCandidates: 0,
-          weeklyPassRate: 0
-        });
-        return;
-      }
-      const candidatesRes = await axios.get('/api/candidates', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const candidates = Array.isArray(candidatesRes.data) ? candidatesRes.data : [];
-
-      // 使用统一的统计计算函数
-      const statsResult = getCandidateStats(candidates);
-
-      setStats({
-        totalResumes: statsResult.totalResumes,
-        totalInterviews: statsResult.interviewCount,
-        totalCandidates: statsResult.totalCandidates,
-        weeklyPassRate: statsResult.weeklyPassRate
-      });
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('获取统计数据失败:', error);
-    }
-  };
-
-  const handleLoginRequired = (route) => {
-    if (!user) {
-      setLoginPromptVisible(true);
-      return false;
-    }
-    return true;
-  };
-
-  const handleLoginPromptClose = () => {
-    setLoginPromptVisible(false);
-  };
-
-  const handleLoginPromptConfirm = () => {
-    setLoginPromptVisible(false);
-    navigate('/login');
-  };
-
-  const handleFeatureClick = (route) => {
-    if (handleLoginRequired(route)) {
-      navigate(route);
-    }
-  };
-
-  const features = [
-    {
-      icon: <FileTextOutlined />,
-      title: '简历初筛',
-      description: '从愿不愿、能不能、合不合三个维度深度分析候选人，生成专业报告',
-      color: 'green',
-      route: '/resume'
-    },
-    {
-      icon: <TeamOutlined />,
-      title: '候选管理',
-      description: '查看和管理所有候选人信息，跟踪面试进度，高效管理招聘流程',
-      color: 'orange',
-      route: '/resume-analysis'
-    },
-    {
-      icon: <RobotOutlined />,
-      title: '面试访谈',
-      description: '模拟真实面试场景，AI智能提问与评估，提供专业面试报告',
-      color: 'purple',
-      route: '/chat'
-    }
-  ];
-
-  const statCards = [
-    {
-      label: '已处理简历',
-      value: stats.totalResumes,
-      icon: <FileTextOutlined />,
-      color: 'blue'
-    },
-    {
-      label: 'AI面试次数',
-      value: stats.totalInterviews,
-      icon: <RobotOutlined />,
-      color: 'purple'
-    },
-    {
-      label: '候选人总数',
-      value: stats.totalCandidates,
-      icon: <TeamOutlined />,
-      color: 'green'
-    },
-    {
-      label: '本周通过率',
-      value: `${stats.weeklyPassRate}%`,
-      icon: <RiseOutlined />,
-      color: 'orange'
-    }
-  ];
 
   return (
-    <PageContainer>
-      {/* Hero区域 */}
+    <PageWrapper>
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500&family=Noto+Sans+SC:wght@300;400;500&family=JetBrains+Mono:wght@400&family=Cabinet+Grotesk:wght@400;500;700&display=swap');
+
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+
+          html {
+            scroll-behavior: smooth;
+          }
+
+          ::selection {
+            background: ${colors.highlight};
+            color: #FFFFFF;
+          }
+
+          ::-webkit-scrollbar {
+            width: 6px;
+          }
+
+          ::-webkit-scrollbar-track {
+            background: ${colors.bg};
+          }
+
+          ::-webkit-scrollbar-thumb {
+            background: ${colors.border};
+          }
+
+          @media (max-width: 768px) {
+            ${HeroContent} {
+              padding: 0 24px;
+            }
+          }
+        `}
+      </style>
+
       <HeroSection>
+        <HeroVideo
+          autoPlay
+          muted
+          loop
+          playsInline
+          poster="https://picsum.photos/seed/hero-recruit/1920/1080"
+        >
+          <source src="/hero-recruit.mp4" type="video/mp4" />
+        </HeroVideo>
+        <HeroOverlay />
         <HeroContent>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
+          <HeroTitle
+            initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+            style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 500, letterSpacing: '-0.03em' }}
           >
-            <HeroTitle level={1}>
-              <span className="highlight">AI驱动</span>的智能招聘平台
-            </HeroTitle>
-            <HeroDesc>
-              基于LStwin-AI技术，为您提供简历初筛、面试访谈、候选管理等一站式招聘解决方案，让招聘更高效、更智能。
-            </HeroDesc>
-            <HeroButtons>
-              <PrimaryButton 
-                type="primary" 
-                icon={<RocketOutlined />}
-                onClick={() => handleFeatureClick('/chat')}
-              >
-                开始体验
-              </PrimaryButton>
-              <SecondaryButton 
-                icon={<ThunderboltOutlined />}
-                onClick={() => handleFeatureClick('/resume')}
-              >
-                上传简历
-              </SecondaryButton>
-            </HeroButtons>
-          </motion.div>
+            Link & Sense
+          </HeroTitle>
+          <HeroSubtitle
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
+          >
+            重新定义人才评估，让每一次对话都成为精准的人才匹配
+          </HeroSubtitle>
+          <HeroCTA
+            href="#"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.8 }}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('/login');
+            }}
+          >
+            登  录 →
+          </HeroCTA>
         </HeroContent>
       </HeroSection>
-
-      {/* 统计卡片 */}
-      <StatsSection>
-        <SectionHeader>
-          <SectionTitle level={4}>数据概览</SectionTitle>
-        </SectionHeader>
-        <Row gutter={[20, 20]}>
-          {statCards.map((stat, index) => (
-            <Col xs={24} sm={12} lg={6} key={index}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-              >
-                <StatCard>
-                  <StatCardContent>
-                    <StatLeft>
-                      <StatLabel>
-                        {stat.label}
-                      </StatLabel>
-                      <StatValue>{stat.value}</StatValue>
-                    </StatLeft>
-                    <StatIconWrapper className={stat.color}>
-                      {stat.icon}
-                    </StatIconWrapper>
-                  </StatCardContent>
-                </StatCard>
-              </motion.div>
-            </Col>
-          ))}
-        </Row>
-      </StatsSection>
-
-      {/* 核心功能 */}
-      <FeaturesSection>
-        <SectionHeader>
-          <SectionTitle level={4}>核心功能</SectionTitle>
-          <Button type="link" style={{ padding: 0 }}>
-            查看全部 <ArrowRightOutlined />
-          </Button>
-        </SectionHeader>
-
-        <FeaturesFlexContainer>
-          {features.map((feature, index) => (
-            <FeatureFlexItem key={index}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-              >
-                <FeatureCard
-                  $hoverColor={feature.color === 'blue' ? colors.primary : feature.color === 'green' ? colors.success : feature.color === 'orange' ? colors.warning : colors.purple}
-                  onClick={() => handleFeatureClick(feature.route)}
-                >
-                  <FeatureIcon className={feature.color}>
-                    {feature.icon}
-                  </FeatureIcon>
-                  <FeatureTitle level={4}>{feature.title}</FeatureTitle>
-                  <FeatureDesc>{feature.description}</FeatureDesc>
-                  <FeatureAction>
-                    立即使用 <ArrowRightOutlined className="feature-arrow" />
-                  </FeatureAction>
-                </FeatureCard>
-              </motion.div>
-            </FeatureFlexItem>
-          ))}
-        </FeaturesFlexContainer>
-      </FeaturesSection>
-      <LoginPromptModal
-        visible={loginPromptVisible}
-        onClose={handleLoginPromptClose}
-        onLogin={handleLoginPromptConfirm}
-      />
-    </PageContainer>
+    </PageWrapper>
   );
 };
 

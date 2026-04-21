@@ -27,10 +27,30 @@ import {
   CheckCircleOutlined,
   BulbOutlined
 } from '@ant-design/icons';
+import styled from 'styled-components';
 import { calculateResumeScore } from '../pages/ResumeAnalysis';
 import './CandidateDetailModal.css';
 
 const { Title, Text } = Typography;
+
+import { colors } from '../../theme/colors';
+
+const StyledModal = styled(Modal)`
+  .ant-modal-content {
+    border-radius: 16px;
+    padding: 0;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+  }
+
+  .ant-modal-body {
+    padding: 0;
+  }
+
+  .ant-modal-header {
+    display: none;
+  }
+`;
 
 const ANALYSIS_STAGE_META = {
   'local-VL排队中': {
@@ -485,8 +505,21 @@ const renderTimelineList = (items, renderItem, emptyText) => {
 };
 
 const getAnalysisFromCandidate = (candidate) => {
+  // 优先使用 resumeAnalysisResult，但需要合并候选人根级别的评分字段
   if (candidate?.resumeAnalysisResult) {
-    return candidate.resumeAnalysisResult;
+    const analysisResult = candidate.resumeAnalysisResult;
+    // 确保 scores 对象包含候选人根级别的最新评分
+    return {
+      ...analysisResult,
+      scores: {
+        ...analysisResult.scores,
+        // 使用候选人根级别的评分（优先级最高，因为面试后这些值会更新）
+        mbtiScore: candidate.mbtiScore ?? analysisResult.scores?.mbtiScore ?? 0,
+        interviewScore: candidate.interviewScore ?? analysisResult.scores?.interviewScore ?? 0,
+        hasInterview: candidate.hasInterview ?? analysisResult.scores?.hasInterview ?? false,
+        finalScore: candidate.finalScore ?? candidate.matchScore ?? analysisResult.scores?.finalScore ?? 0
+      }
+    };
   }
 
   const legacyAnalysis = candidate?.analysisDetails?.resumeAnalysis || candidate?.resumeAnalysis;
@@ -671,23 +704,22 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
   const interviewSuggestions = !isAnalyzing
     ? (safeArray(summary.interviewSuggestions).length > 0
       ? safeArray(summary.interviewSuggestions)
-      : buildFallbackInterviewSuggestions({ 
-          risks, 
+      : buildFallbackInterviewSuggestions({
+          risks,
           scores: { ...scores, resumeScore: displayedResumeScore },
-          extractedContent: resumeData?.extractedContent || {},
+          extractedContent: analysis?.extractedContent || {},
           position: candidate.position
         }))
     : [];
 
   return (
-    <Modal
-      title={null}
+    <StyledModal
       open={visible}
       onCancel={onClose}
       footer={null}
       width={1180}
       destroyOnClose
-      styles={{ body: { padding: 18, maxHeight: '84vh', overflow: 'auto' } }}
+      styles={{ body: { padding: 0, maxHeight: '84vh', overflow: 'auto' } }}
     >
       <div className="candidate-detail-modal">
         <section className="candidate-detail-hero">
@@ -840,20 +872,20 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
               <section className="candidate-detail-card">
                 <div className="candidate-detail-card-header">
                   <div className="candidate-detail-card-title">
-                    <FileSearchOutlined /> AI 面试建议
-                  </div>
-                  <div className="candidate-detail-chip-group">
-                    {matchMeta && <Tag color={matchMeta.color}>{matchMeta.label}</Tag>}
-                    <Tag color="blue">{resumeRecommendationLabel}</Tag>
+                    <FileSearchOutlined /> 面试报告
                   </div>
                 </div>
-                <div className="candidate-detail-reason-list">
-                  {interviewSuggestions.map((item, index) => (
-                    <div className="candidate-detail-reason-item" key={`${item}-${index}`}>
-                      {item}
+                {candidate.hasInterview && candidate.interviewDetails?.report ? (
+                  <div className="candidate-detail-reason-list">
+                    <div className="candidate-detail-reason-item" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+                      {candidate.interviewDetails.report}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#9CA3AF', padding: '16px 0', textAlign: 'center' }}>
+                    该应聘者还未面试
+                  </div>
+                )}
               </section>
             </div>
           </>
@@ -900,7 +932,7 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
           </div>
         )}
       </div>
-    </Modal>
+    </StyledModal>
   );
 };
 

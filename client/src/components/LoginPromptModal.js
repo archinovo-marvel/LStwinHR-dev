@@ -3,22 +3,7 @@ import { Modal, Button } from 'antd';
 import { LoginOutlined, UserOutlined } from '@ant-design/icons';
 import styled, { keyframes } from 'styled-components';
 
-const colors = {
-  primary: '#2F80ED',
-  primaryHover: '#1C5FD4',
-  primaryLight: '#E8F2FF',
-  background: '#F7F9FC',
-  cardBg: '#FFFFFF',
-  title: '#1F2D3D',
-  text: '#4A5568',
-  muted: '#94A3B8',
-  border: '#E2E8F0',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-  purple: '#8B5CF6',
-  cyan: '#06B6D4'
-};
+import { colors } from '../../theme/colors';
 
 const fadeIn = keyframes`
   from {

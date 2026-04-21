@@ -1,0 +1,20 @@
+// 统一颜色变量 - 从所有组件中提取
+export const colors = {
+  primary: '#005DA9',
+  primaryDark: '#004080',
+  primaryLight: '#E8F4FC',
+  accent: '#00C2A8',
+  accentLight: '#E0F7F5',
+  success: '#52c41a',
+  warning: '#faad14',
+  error: '#ff4d4f',
+  text: '#1A1A1A',
+  textSecondary: '#6B7C8D',
+  textMuted: '#6B7C8D',
+  muted: '#6B7C8D',
+  border: '#E8E8E8',
+  background: '#F5F7FA',
+  white: '#FFFFFF',
+  cardBg: '#FFFFFF',
+  shadow: 'rgba(0, 0, 0, 0.08)',
+};
