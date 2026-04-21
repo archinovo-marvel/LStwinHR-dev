@@ -12,7 +12,11 @@ function createCandidateRouter({
   listCandidatesForUser,
   deleteCandidateById,
   clearCandidatesForUser,
-  getCandidateByIdGlobal
+  getCandidateByIdGlobal,
+  ensureDataFile,
+  getInvalidCandidates,
+  removeCandidateResumeFile,
+  DATA_FILE
 }) {
   const router = express.Router();
 
@@ -243,6 +247,45 @@ function createCandidateRouter({
       res.status(500).json({ error: '清空数据失败' });
     }
   });
+
+  // Cleanup endpoints (legacy JSON file management)
+  if (getInvalidCandidates && ensureDataFile) {
+    router.get('/candidates/cleanup-invalid-preview', async (req, res) => {
+      try {
+        await ensureDataFile();
+        const data = await fs.readFile(DATA_FILE, 'utf8');
+        const candidates = JSON.parse(data);
+        const invalidCandidates = await getInvalidCandidates(candidates);
+        res.json({ success: true, count: invalidCandidates.length, candidates: invalidCandidates });
+      } catch (error) {
+        console.error('预览无效候选人清理失败:', error);
+        res.status(500).json({ error: '预览无效候选人清理失败' });
+      }
+    });
+
+    router.delete('/candidates/cleanup-invalid', async (req, res) => {
+      try {
+        await ensureDataFile();
+        const data = await fs.readFile(DATA_FILE, 'utf8');
+        const candidates = JSON.parse(data);
+        const invalidCandidates = await getInvalidCandidates(candidates);
+        if (invalidCandidates.length === 0) {
+          return res.json({ success: true, removedCount: 0, removedCandidates: [] });
+        }
+        const invalidIds = new Set(invalidCandidates.map(c => c.id));
+        const removedCandidates = candidates.filter(c => invalidIds.has(c.id));
+        const validCandidates = candidates.filter(c => !invalidIds.has(c.id));
+        for (const candidate of removedCandidates) {
+          await removeCandidateResumeFile(candidate);
+        }
+        await fs.writeFile(DATA_FILE, JSON.stringify(validCandidates, null, 2));
+        res.json({ success: true, removedCount: removedCandidates.length, removedCandidates: invalidCandidates });
+      } catch (error) {
+        console.error('清理无效候选人失败:', error);
+        res.status(500).json({ error: '清理无效候选人失败' });
+      }
+    });
+  }
 
   return router;
 }

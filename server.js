@@ -1614,7 +1614,11 @@ const candidateRouter = createCandidateRouter({
   listCandidatesForUser,
   deleteCandidateById,
   clearCandidatesForUser,
-  getCandidateByIdGlobal
+  getCandidateByIdGlobal,
+  ensureDataFile,
+  getInvalidCandidates,
+  removeCandidateResumeFile,
+  DATA_FILE
 });
 app.use('/api', candidateRouter);
 
@@ -1670,64 +1674,7 @@ async function ensureDataFile() {
 // 聊天路由已移至 routes/chat.routes.js
 // 面试分保存已移至 routes/candidateRoutes.js (saveCandidateInterviewResult factory)
 // 候选人创建已移至 routes/candidateRoutes.js (createCandidateSubmission factory)
-
-// 预览无效候选人清理结果
-app.get('/api/candidates/cleanup-invalid-preview', async (req, res) => {
-  try {
-    await ensureDataFile();
-    const data = await fs.readFile(DATA_FILE, 'utf8');
-    const candidates = JSON.parse(data);
-    const invalidCandidates = await getInvalidCandidates(candidates);
-
-    res.json({
-      success: true,
-      count: invalidCandidates.length,
-      candidates: invalidCandidates
-    });
-  } catch (error) {
-    console.error('预览无效候选人清理失败:', error);
-    res.status(500).json({ error: '预览无效候选人清理失败' });
-  }
-});
-
-// 清理无效候选人数据
-app.delete('/api/candidates/cleanup-invalid', async (req, res) => {
-  try {
-    await ensureDataFile();
-    const data = await fs.readFile(DATA_FILE, 'utf8');
-    const candidates = JSON.parse(data);
-    const invalidCandidates = await getInvalidCandidates(candidates);
-
-    if (invalidCandidates.length === 0) {
-      return res.json({
-        success: true,
-        removedCount: 0,
-        removedCandidates: []
-      });
-    }
-
-    const invalidIds = new Set(invalidCandidates.map(candidate => candidate.id));
-    const removedCandidates = candidates.filter(candidate => invalidIds.has(candidate.id));
-    const validCandidates = candidates.filter(candidate => !invalidIds.has(candidate.id));
-
-    for (const candidate of removedCandidates) {
-      await removeCandidateResumeFile(candidate);
-    }
-
-    await fs.writeFile(DATA_FILE, JSON.stringify(validCandidates, null, 2));
-
-    res.json({
-      success: true,
-      removedCount: removedCandidates.length,
-      removedCandidates: invalidCandidates
-    });
-  } catch (error) {
-    console.error('清理无效候选人失败:', error);
-    res.status(500).json({ error: '清理无效候选人失败' });
-  }
-});
-
-// 清空所有数据已移至 routes/candidateRoutes.js
+// 预览/清理无效候选人已移至 routes/candidateRoutes.js
 
 // 讯飞路由已移至 routes/xunfei.routes.js
 // 健康检查
