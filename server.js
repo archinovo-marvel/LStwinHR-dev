@@ -1503,9 +1503,70 @@ const candidateRouter = createCandidateRouter({
   authMiddleware,
   publicSubmissionMiddleware: (req, res, next) => next(),
   upload,
-  createCandidateSubmission: async ({ body, file, owner, source }) => {
-    // This function is not implemented - inline handlers are used for POST /candidates
-    throw new Error('createCandidateSubmission not implemented');
+  createCandidateSubmission: async ({ body, file, owner }) => {
+    // Factory has closure access to server.js scope helpers
+    if (!owner) throw Object.assign(new Error('未授权，请先登录'), { statusCode: 401 });
+
+    await ensureCandidateDatabase(owner.id);
+    await ensureDataFile();
+
+    let resumeFilePath = null;
+    let resumeFileName = null;
+
+    if (file) {
+      try {
+        const uploadDir = path.join(__dirname, 'uploads', 'resumes');
+        if (!fsSync.existsSync(uploadDir)) fsSync.mkdirSync(uploadDir, { recursive: true });
+        const fileExt = path.extname(file.originalname).toLowerCase();
+        resumeFileName = buildUploadedResumeFileName(body.name, body.position, body.mbti, fileExt);
+        resumeFilePath = path.join(uploadDir, resumeFileName);
+        const processedUpload = await compressImageBufferIfNeeded(file.buffer, fileExt);
+        if (fsSync.existsSync(resumeFilePath)) {
+          const uniqueSuffix = `${Date.now()}_${Math.round(Math.random() * 1E6)}`;
+          const baseName = path.basename(resumeFileName, fileExt);
+          resumeFileName = `${baseName}_${uniqueSuffix}${fileExt}`;
+          resumeFilePath = path.join(uploadDir, resumeFileName);
+        }
+        await fs.writeFile(resumeFilePath, processedUpload.buffer);
+      } catch (error) {
+        console.error('保存文件失败:', error);
+      }
+    }
+
+    const provisionalScores = calculateCandidateScores(body, null);
+    const newCandidate = {
+      ...body,
+      id: generateCandidateId(),
+      ownerUserId: owner.id,
+      ownerUserName: owner.username || owner.email || '',
+      ownerUserEmail: owner.email || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      resumeFilePath,
+      resumeOriginalName: file ? file.originalname : null,
+      resumeFileName,
+      matchScore: provisionalScores.finalMatchScore,
+      mbtiScore: provisionalScores.mbtiScore,
+      resumeScore: provisionalScores.resumeScore,
+      resumeAnalysis: file ? createPendingResumeAnalysis() : null,
+      recommendation: file ? '简历分析排队中，请稍候查看结果' : '建议进一步评估',
+      hasInterview: false,
+      status: file ? '分析中' : '已提交'
+    };
+
+    if (newCandidate.resumeFilePath && fsSync.existsSync(newCandidate.resumeFilePath)) {
+      try {
+        const stats = await fs.stat(newCandidate.resumeFilePath);
+        newCandidate.resumeSize = String(stats.size);
+        newCandidate.resumeFileHash = await calculateFileHash(newCandidate.resumeFilePath);
+      } catch (error) { /* ignore */ }
+    }
+
+    if (file) newCandidate.resumeFileBuffer = file.buffer;
+    await upsertCandidateForUser(owner.id, newCandidate);
+    if (file) scheduleResumeAnalysis(newCandidate.id, { renameAfterAnalysis: true });
+
+    return newCandidate;
   },
   saveCandidateInterviewResult: async ({ user, payload }) => {
     const { candidateId, interviewScore, interviewDetails, interviewDate, interviewRecord, candidateSnapshot } = payload;
@@ -1573,6 +1634,9 @@ app.use('/api', createInterviewSessionRouter({
   deleteTemporaryInterviewSessionsForUser
 }));
 
+// 挂载讯飞路由
+app.use('/api', require('./routes/xunfei.routes'));
+
 // 测试数据库连接
 testConnection();
 
@@ -1605,162 +1669,7 @@ async function ensureDataFile() {
 // 简历下载端点已移至 routes/candidateRoutes.js
 // 聊天路由已移至 routes/chat.routes.js
 // 面试分保存已移至 routes/candidateRoutes.js (saveCandidateInterviewResult factory)
-
-// 添加候选人数据
-app.post('/api/candidates', upload.single('resume'), async (req, res) => {
-  try {
-    console.log('=== 候选人数据请求开始 ===');
-    console.log('Content-Type:', req.headers['content-type']);
-    console.log('请求体类型:', typeof req.body);
-    console.log('收到候选人数据请求:', req.body);
-    console.log('上传的文件:', req.file);
-    console.log('multer错误:', req.multerError);
-    console.log('=== 候选人数据请求结束 ===');
-    console.log('请求体字段检查:', {
-      name: req.body.name,
-      position: req.body.position,
-      phone: req.body.phone,
-      email: req.body.email,
-      mbti: req.body.mbti
-    });
-    
-    // 详细检查文件上传信息
-    if (req.file) {
-      console.log('文件上传成功:', {
-        fieldname: req.file.fieldname,
-        originalname: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-        buffer: req.file.buffer ? '有数据' : '无数据'
-      });
-    } else {
-      console.log('没有文件上传');
-    }
-    
-     // 设置响应超时
-    res.setTimeout(30000, () => {
-      console.error('请求超时');
-      if (!res.headersSent) {
-        res.status(504).json({ error: '请求超时，请重试' });
-      }
-    });
-    
-    const token = req.headers.authorization?.split(' ')[1];
-    let owner = null;
-    if (token) {
-      try { const decoded = jwt.verify(token, JWT_SECRET); owner = { id: decoded.id, username: decoded.username, email: decoded.email }; } catch {}
-    }
-    if (!owner) return res.status(401).json({ error: '未授权，请先登录' });
-    await ensureCandidateDatabase(owner.id);
-    
-    await ensureDataFile();
-    const data = await fs.readFile(DATA_FILE, 'utf8');
-    const candidates = JSON.parse(data);
-    
-    let resumeFilePath = null;
-    let resumeFileName = null;
-    
-    // 如果有文件上传，保存文件到磁盘
-    if (req.file) {
-      
-      try {
-        const uploadDir = path.join(__dirname, 'uploads', 'resumes');
-        console.log('上传目录路径:', uploadDir);
-        
-        // 确保目录存在
-        if (!fsSync.existsSync(uploadDir)) {
-          console.log('创建上传目录:', uploadDir);
-          fsSync.mkdirSync(uploadDir, { recursive: true });
-        }
-        
-        const fileExt = path.extname(req.file.originalname).toLowerCase();
-        resumeFileName = buildUploadedResumeFileName(req.body.name, req.body.position, req.body.mbti, fileExt);
-        resumeFilePath = path.join(uploadDir, resumeFileName);
-        const processedUpload = await compressImageBufferIfNeeded(req.file.buffer, fileExt);
-        if (fsSync.existsSync(resumeFilePath)) {
-          const uniqueSuffix = `${Date.now()}_${Math.round(Math.random() * 1E6)}`;
-          const baseName = path.basename(resumeFileName, fileExt);
-          resumeFileName = `${baseName}_${uniqueSuffix}${fileExt}`;
-          resumeFilePath = path.join(uploadDir, resumeFileName);
-        }
-        
-        await fs.writeFile(resumeFilePath, processedUpload.buffer);
-        console.log('文件已保存到:', resumeFilePath);
-        console.log(`初筛上传预处理完成: ${req.file.size} -> ${processedUpload.buffer?.length || req.file.size} bytes`);
-      } catch (error) {
-        console.error('❌ 保存文件失败:', error);
-        console.error('错误详情:', error.message);
-        console.error('错误堆栈:', error.stack);
-      }
-    }
-    
-    const provisionalScores = calculateCandidateScores(req.body, null);
-    
-    const newCandidate = {
-      ...req.body,
-      id: generateCandidateId(),
-      ownerUserId: owner.id,
-      ownerUserName: owner.username || owner.email || '',
-      ownerUserEmail: owner.email || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      resumeFilePath: resumeFilePath,
-      resumeOriginalName: req.file ? req.file.originalname : null,
-      resumeFileName: resumeFileName,
-      matchScore: provisionalScores.finalMatchScore,
-      mbtiScore: provisionalScores.mbtiScore,
-      resumeScore: provisionalScores.resumeScore,
-      resumeAnalysis: req.file ? createPendingResumeAnalysis() : null,
-      recommendation: req.file ? '简历分析排队中，请稍候查看结果' : '建议进一步评估',
-      hasInterview: false,
-      status: req.file ? '分析中' : '已提交'
-    };
-
-    if (newCandidate.resumeFilePath && fsSync.existsSync(newCandidate.resumeFilePath)) {
-      try {
-        const stats = await fs.stat(newCandidate.resumeFilePath);
-        newCandidate.resumeSize = String(stats.size);
-        newCandidate.resumeFileHash = await calculateFileHash(newCandidate.resumeFilePath);
-      } catch (error) {
-        console.error('生成简历文件指纹失败:', error.message);
-      }
-    }
-    
-    console.log('创建的新候选人数据:', {
-      name: newCandidate.name,
-      position: newCandidate.position,
-      matchScore: newCandidate.matchScore,
-      mbtiScore: newCandidate.mbtiScore,
-      resumeScore: newCandidate.resumeScore
-    });
-    
-    if (req.file) {
-      newCandidate.resumeFileBuffer = req.file.buffer;
-    }
-    
-    await upsertCandidateForUser(owner.id, newCandidate);
-
-    if (req.file) {
-      scheduleResumeAnalysis(newCandidate.id, { renameAfterAnalysis: true });
-    }
-    
-    console.log('新候选人数据已保存:', newCandidate);
-    res.json({ success: true, candidate: newCandidate });
-  } catch (error) {
-    console.error('保存数据失败:', error);
-    console.error('错误堆栈:', error.stack);
-    
-    if (!res.headersSent) {
-      res.status(500).json({ 
-        error: '保存数据失败', 
-        message: error.message,
-        timestamp: new Date().toISOString()
-      });
-    }
-  }
-});
-
-// 删除候选人数据已移至 routes/candidateRoutes.js
+// 候选人创建已移至 routes/candidateRoutes.js (createCandidateSubmission factory)
 
 // 预览无效候选人清理结果
 app.get('/api/candidates/cleanup-invalid-preview', async (req, res) => {
@@ -1820,49 +1729,7 @@ app.delete('/api/candidates/cleanup-invalid', async (req, res) => {
 
 // 清空所有数据已移至 routes/candidateRoutes.js
 
-// 讯飞虚拟人签名生成 API
-app.get('/api/xunfei/avatar-sign', (req, res) => {
-  try {
-    const appId = process.env.XUNFEI_APP_ID || process.env.REACT_APP_XUNFEI_APP_ID;
-    const apiKey = process.env.XUNFEI_API_KEY || process.env.REACT_APP_XUNFEI_API_KEY;
-    const apiSecret = process.env.XUNFEI_API_SECRET || process.env.REACT_APP_XUNFEI_API_SECRET;
-    
-    if (!appId || !apiKey || !apiSecret) {
-      return res.status(500).json({ error: '讯飞 API 配置缺失' });
-    }
-    
-    const host = 'avatar.cn-huadong-1.xf-yun.com';
-    const path = '/v1/interact';
-    const date = new Date().toUTCString();
-    
-    const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`;
-    const signatureSha = crypto.createHmac('sha256', apiSecret).update(signatureOrigin).digest('base64');
-    
-    const authorizationOrigin = `api_key="${apiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
-    const authorization = Buffer.from(authorizationOrigin).toString('base64');
-    
-    const signedUrl = `wss://${host}${path}?authorization=${authorization}&date=${encodeURIComponent(date)}&host=${host}`;
-    
-    console.log('🔐 讯飞签名生成:', {
-      host,
-      path,
-      date,
-      signatureOrigin,
-      authorization: authorization.substring(0, 50) + '...'
-    });
-    
-    res.json({
-      success: true,
-      signedUrl,
-      appId,
-      expiresIn: 300
-    });
-  } catch (error) {
-    console.error('生成讯飞签名失败:', error);
-    res.status(500).json({ error: '生成签名失败' });
-  }
-});
-
+// 讯飞路由已移至 routes/xunfei.routes.js
 // 健康检查
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
