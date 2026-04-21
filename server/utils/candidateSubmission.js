@@ -8,6 +8,8 @@ let Jimp;
 try { Jimp = require('jimp'); } catch (e) { /* Jimp not available */ }
 
 const { generateCandidateId } = require('../../db');
+const { ensureCandidateDatabase, upsertCandidateForUser } = require('../../services/candidateStore');
+const { scheduleResumeAnalysis } = require('../services/resumeAnalysis');
 
 function sanitizeFileNamePart(value, fallback = '未命名') {
   if (!value) return fallback;
@@ -97,11 +99,11 @@ function calculateCandidateScores(candidate, resumeAnalysis) {
  * @param {object} params.body - request body
  * @param {object} params.file - uploaded file (multer)
  * @param {object} params.owner - authenticated user { id, username, email }
- * @param {object} params.deps - server dependencies { ensureCandidateDatabase, upsertCandidateForUser, scheduleResumeAnalysis, ensureDataFile, DATA_FILE }
+ * @param {object} params.deps - server-only: { ensureDataFile, DATA_FILE }
  */
 async function createCandidateSubmission({ body, file, owner, deps }) {
   if (!owner) throw Object.assign(new Error('未授权，请先登录'), { statusCode: 401 });
-  const { ensureCandidateDatabase, upsertCandidateForUser, scheduleResumeAnalysis, ensureDataFile, DATA_FILE } = deps;
+  const { ensureDataFile, DATA_FILE } = deps;
 
   await ensureCandidateDatabase(owner.id);
   await ensureDataFile();

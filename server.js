@@ -1032,7 +1032,7 @@ const candidateRouter = createCandidateRouter({
   publicSubmissionMiddleware: (req, res, next) => next(),
   upload,
   createCandidateSubmission: ({ body, file, owner }) =>
-    createCandidateSubmission({ body, file, owner, deps: { ensureCandidateDatabase, upsertCandidateForUser, scheduleResumeAnalysis, ensureDataFile, DATA_FILE } }),
+    createCandidateSubmission({ body, file, owner, deps: { ensureDataFile, DATA_FILE } }),
   saveCandidateInterviewResult: async ({ user, payload }) => {
     const { candidateId, interviewScore, interviewDetails, interviewDate, interviewRecord, candidateSnapshot } = payload;
 
