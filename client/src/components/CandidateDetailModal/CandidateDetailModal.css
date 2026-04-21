@@ -903,3 +903,130 @@
     transform: rotate(360deg);
   }
 }
+
+/* AI面试评分样式 */
+.candidate-detail-ai-scores {
+  margin-bottom: 20px;
+}
+
+.ai-total-score {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a2a3f;
+}
+
+.ai-total-score span {
+  font-size: 24px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+.interview-analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.question-score-item {
+  border-radius: 20px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #fafbff 0%, #f5f8ff 100%);
+  border: 1px solid rgba(230, 237, 247, 0.8);
+  transition: all 0.25s ease;
+}
+
+.question-score-item:hover {
+  background: linear-gradient(135deg, #f5f9ff 0%, #eef4ff 100%);
+  border-color: rgba(47, 128, 237, 0.2);
+  transform: translateX(4px);
+}
+
+.question-score-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.question-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4A9ECF 0%, #1C5FD4 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.question-text {
+  color: #1a2a3f;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+  flex: 1;
+}
+
+.question-score-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-left: 44px;
+}
+
+.answer-text {
+  color: #445164;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.score-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-left: 44px;
+}
+
+.score-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #eef4ff 0%, #e5efff 100%);
+  border: 1px solid rgba(47, 128, 237, 0.12);
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a2a3f;
+}
+
+.question-comment {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.95) 0%, rgba(255, 245, 230, 0.9) 100%);
+  border-left: 3px solid #F59E0B;
+  color: #6b7a8f;
+  font-size: 13px;
+  line-height: 1.7;
+  margin-left: 44px;
+}
+
+.interview-summary {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(16, 185, 129, 0.02) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.summary-text {
+  margin-top: 8px;
+  color: #445164;
+  font-size: 14px;
+  line-height: 1.8;
+}
