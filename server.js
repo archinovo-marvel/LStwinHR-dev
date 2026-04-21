@@ -1490,6 +1490,31 @@ app.use('/api', authRouter);
 // 挂载岗位路由
 app.use('/api', require('./routes/position.routes'));
 
+// 挂载候选人路由
+const { createCandidateRouter } = require('./routes/candidateRoutes');
+const candidateRouter = createCandidateRouter({
+  authMiddleware,
+  publicSubmissionMiddleware: (req, res, next) => next(),
+  upload,
+  createCandidateSubmission: async ({ body, file, owner, source }) => {
+    // This function is not implemented - inline handlers are used for POST /candidates
+    throw new Error('createCandidateSubmission not implemented');
+  },
+  saveCandidateInterviewResult: async ({ user, payload }) => {
+    // This function is not implemented - inline handlers are used for interview-score
+    throw new Error('saveCandidateInterviewResult not implemented');
+  },
+  listCandidatesForUser,
+  deleteCandidateById,
+  clearCandidatesForUser,
+  getCandidateByIdGlobal
+});
+app.use('/api', candidateRouter);
+
+// 挂载聊天路由
+const { createChatRouter } = require('./routes/chat.routes');
+app.use('/api', createChatRouter());
+
 // 测试数据库连接
 testConnection();
 
@@ -1610,305 +1635,8 @@ app.post('/api/candidates/interview-score', express.json(), async (req, res) => 
   }
 });
 
-// 获取候选人列表（用于面试选择）
-app.get('/api/candidates', async (req, res) => {
-  req.setTimeout(60000);
-  res.setTimeout(60000);
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-    let userId = null;
-    if (token) {
-      try { const decoded = jwt.verify(token, JWT_SECRET); userId = decoded.id; } catch {}
-    }
-    if (!userId) return res.status(401).json({ error: '未授权' });
-    const candidates = await listCandidatesForUser(userId);
-    
-    const pendingCandidates = candidates.filter(c => 
-      c.status === '待分析' || 
-      c.status === '分析中' ||
-      (c.resumeFileBuffer && !c.resumeAnalysis)
-    );
-    
-    if (pendingCandidates.length > 0) {
-      console.log(`[自动分析] 当前检测到 ${pendingCandidates.length} 个待分析简历，但已禁用列表接口自动派发，避免占用本地VL模型`);
-    }
-    
-    res.json(candidates.map(c => ({
-      id: c.id, name: c.name, position: c.position, phone: c.phone, email: c.email,
-      mbti: c.mbti, submitTime: c.submitTime, matchScore: c.matchScore,
-      interviewScore: c.interviewScore || null, finalScore: c.finalScore || null,
-      hasInterview: c.hasInterview || false, interviewDate: c.interviewDate || null,
-      interviewDetails: c.interviewDetails || null, recommendation: c.recommendation,
-      analysisDetails: c.analysisDetails, resumeAnalysis: c.resumeAnalysis,
-      resumeAnalysisResult: c.resumeAnalysisResult,
-      resumeFilePath: c.resumeFilePath, resumeFileName: c.resumeFileName,
-      resumeOriginalName: c.resumeOriginalName, resumeSize: c.resumeSize,
-      status: c.status, createdAt: c.createdAt, updatedAt: c.updatedAt
-    })));
-  } catch (error) {
-    console.error('获取候选人列表失败:', error);
-    res.status(500).json({ error: '获取候选人列表失败' });
-  }
-});
-
-// 获取工作流列表
-app.get('/api/workflows', async (req, res) => {
-  try {
-    // 返回默认工作流数据，与前端默认值保持一致
-    const workflows = [
-      {
-        id: 1,
-        title: '简历智能分析',
-        description: '上传简历，AI自动分析候选人特点',
-        steps: ['上传简历文件', 'AI智能分析', '生成分析报告', '查看匹配度'],
-        route: '/resume'
-      },
-      {
-        id: 2,
-        title: 'AI智能对话',
-        description: '与AI HR进行智能对话，了解企业信息',
-        steps: ['选择对话类型', '开始AI对话', '语音/文字交互', '获得专业建议'],
-        route: '/chat'
-      },
-      {
-        id: 3,
-        title: '候选人管理',
-        description: '查看和管理所有候选人信息',
-        steps: ['查看候选人列表', '分析简历内容', '查看匹配度', '管理候选人状态'],
-        route: '/resume-analysis'
-      },
-      {
-        id: 4,
-        title: 'AI面试评估',
-        description: '进行AI模拟面试，获得专业评估',
-        steps: ['选择面试类型', '开始AI面试', '回答问题', '获得评估报告'],
-        route: '/chat'
-      }
-    ];
-    res.json({ workflows });
-  } catch (error) {
-    console.error('获取工作流失败:', error);
-    res.status(500).json({ error: '获取工作流失败' });
-  }
-});
-
-// 本地 LLM 对话降级接口
-app.get('/api/chat/runtime', async (req, res) => {
-  try {
-    const runtime = await getChatRuntimeStatus(
-      String(req.query.engine || 'auto'),
-      String(req.query.localModel || '')
-    );
-    res.json(runtime);
-  } catch (error) {
-    console.error('获取对话引擎状态失败:', error);
-    res.status(500).json({ error: `获取对话引擎状态失败: ${error.message}` });
-  }
-});
-
-app.post('/api/chat/switch-engine-services', async (req, res) => {
-  if (!DOCKER_CONTROL_ENABLED) {
-    return res.status(501).json({
-      success: false,
-      message: '当前环境未启用Docker服务控制'
-    });
-  }
-
-  try {
-    const engine = String(req.body?.engine || '').trim();
-    const requestedLocalModel = String(req.body?.localModel || '').trim();
-    const localModelConfig = resolveLocalModelConfig(requestedLocalModel);
-
-    if (!engine) {
-      return res.status(400).json({
-        success: false,
-        message: '缺少引擎参数'
-      });
-    }
-
-    if (engine === 'ollama') {
-      const textC = await resolveContainerName('local-llm-text');
-      const vlC = await resolveContainerName('local-llm-vl');
-      const ollamaC = await resolveContainerName('ollama');
-      if (textC) await stopContainerIfNeeded(textC);
-      if (vlC) await stopContainerIfNeeded(vlC);
-      if (ollamaC) {
-        await startContainerIfNeeded(ollamaC);
-        await waitForServiceReady(`${OLLAMA_BASE_URL}/api/tags`, 180000, 3000);
-      }
-
-      return res.json({
-        success: true,
-        engine: 'ollama',
-        activeServices: ['ollama']
-      });
-    }
-
-    if (engine === 'local' || engine === 'auto') {
-      const ollamaC = await resolveContainerName('ollama');
-      const vlC = await resolveContainerName('local-llm-vl');
-      if (ollamaC) await stopContainerIfNeeded(ollamaC);
-      if (vlC) {
-        await startContainerIfNeeded(vlC);
-        await waitForServiceReady(`${LOCAL_LLM_VL_URL}/health`, 240000, 3000);
-      }
-
-      return res.json({
-        success: true,
-        engine,
-        activeServices: ['local-llm-vl'],
-        localModel: localModelConfig?.key || ''
-      });
-    }
-
-    return res.json({
-      success: true,
-      engine,
-      message: '当前引擎无需切换本地推理服务'
-    });
-  } catch (error) {
-    console.error('切换对话引擎服务失败:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || '切换对话引擎服务失败'
-    });
-  }
-});
-
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, mode = 'general', engine = 'auto', localModel = '', images = [] } = req.body || {};
-
-    if (!message || !String(message).trim()) {
-      return res.status(400).json({ error: '消息内容不能为空' });
-    }
-
-    const prompt = `${buildChatSystemPrompt(mode)}\n\n用户输入：\n${String(message).trim()}\n\n请直接开始回答：`;
-
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    const forceLocal = engine === 'local';
-    const forceOllama = engine === 'ollama';
-    const useAuto = engine === 'auto' || !engine;
-
-    if (forceLocal && !LOCAL_LLM_ENABLED) {
-      return res.status(400).json({ error: '本地模型当前未启用，无法切换到本地模型' });
-    }
-
-    if ((LOCAL_LLM_ENABLED && !forceOllama) && (forceLocal || useAuto)) {
-      try {
-        const resolvedLocalModel = resolveLocalModelConfig(localModel);
-        res.setHeader('X-LLM-Source', 'local');
-        res.setHeader('X-LLM-Model', resolvedLocalModel?.model || LOCAL_LLM_MODEL);
-        res.setHeader('X-LLM-Label', `local-${resolvedLocalModel?.model || LOCAL_LLM_MODEL}`);
-        await streamLocalModelResponse(res, prompt, mode, localModel, images);
-      } catch (localError) {
-        if (forceLocal) {
-          throw localError;
-        }
-        console.warn('本地模型服务不可用，回退到 Ollama:', localError.message);
-        const resolvedModel = await resolveOllamaModel();
-        res.setHeader('X-LLM-Source', 'ollama');
-        res.setHeader('X-LLM-Model', resolvedModel);
-        res.setHeader('X-LLM-Label', `ollama-${resolvedModel}`);
-        await streamOllamaResponse(res, prompt, mode, resolvedModel);
-      }
-    } else {
-      const resolvedModel = await resolveOllamaModel();
-      res.setHeader('X-LLM-Source', 'ollama');
-      res.setHeader('X-LLM-Model', resolvedModel);
-      res.setHeader('X-LLM-Label', `ollama-${resolvedModel}`);
-      await streamOllamaResponse(res, prompt, mode, resolvedModel);
-    }
-
-    res.end();
-  } catch (error) {
-    console.error('本地LLM对话失败:', error);
-    res.status(500).json({ error: `本地LLM对话失败: ${error.message}` });
-  }
-});
-
-// 简历下载端点
-app.get('/api/download-resume/:id', async (req, res) => {
-  try {
-    console.log('收到下载请求:', req.params.id);
-    const candidateId = parseInt(req.params.id);
-    
-    if (isNaN(candidateId)) {
-      console.error('无效的候选人ID:', req.params.id);
-      return res.status(400).send('无效的候选人ID');
-    }
-    
-    // 从数据库获取候选人数据
-    const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: true });
-    
-    console.log('找到候选人:', candidate ? candidate.name : '未找到');
-    
-    if (!candidate) {
-      return res.status(404).send('候选人不存在');
-    }
-    
-    // 确定文件扩展名
-    let ext;
-    if (candidate.resumeFileBuffer && candidate.resumeFileName) {
-      ext = path.extname(candidate.resumeFileName).toLowerCase();
-    } else if (candidate.resumeFilePath) {
-      ext = path.extname(candidate.resumeFilePath).toLowerCase();
-    } else {
-      return res.status(404).send('简历文件不存在');
-    }
-    
-    let contentType = 'application/octet-stream';
-    if (ext === '.pdf') {
-      contentType = 'application/pdf';
-    } else if (ext === '.doc') {
-      contentType = 'application/msword';
-    } else if (ext === '.docx') {
-      contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    } else if (ext === '.jpg' || ext === '.jpeg') {
-      contentType = 'image/jpeg';
-    } else if (ext === '.png') {
-      contentType = 'image/png';
-    }
-    
-    // 如果有内存中的文件，直接下载
-    if (candidate.resumeFileBuffer) {
-      const fileName = candidate.resumeFileName || `resume_${candidate.id}${ext}`;
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-      res.send(candidate.resumeFileBuffer);
-      console.log('内存文件下载成功');
-      return;
-    }
-    
-    // 如果有文件路径，尝试读取文件
-    if (candidate.resumeFilePath) {
-      try {
-        await fs.access(candidate.resumeFilePath);
-        const fileBuffer = await fs.readFile(candidate.resumeFilePath);
-        
-        res.setHeader('Content-Type', contentType);
-        const fileName = candidate.resumeFileName || `resume_${candidate.id}${ext}`;
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-        
-        res.send(fileBuffer);
-        console.log('文件下载成功');
-        return;
-      } catch (error) {
-        console.log('文件不存在:', error.message);
-      }
-    }
-    
-    // 如果没有文件，返回错误信息
-    console.log('简历文件不存在');
-    res.status(404).send('简历文件不存在');
-  } catch (error) {
-    console.error('下载简历失败:', error);
-    console.error('错误堆栈:', error.stack);
-    res.status(500).send('下载失败');
-  }
-});
+// 简历下载端点已移至 routes/candidateRoutes.js
+// 聊天路由已移至 routes/chat.routes.js
 
 // 简单的测试下载端点
 app.get('/api/test-download', (req, res) => {
@@ -2225,24 +1953,7 @@ app.post('/api/candidates', upload.single('resume'), async (req, res) => {
   }
 });
 
-// 删除候选人数据
-app.delete('/api/candidates/:id', async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-    let userId = null;
-    if (token) { try { const decoded = jwt.verify(token, JWT_SECRET); userId = decoded.id; } catch {} }
-    if (!userId) return res.status(401).json({ error: '未授权' });
-    
-    const candidateId = parseInt(req.params.id);
-    if (isNaN(candidateId)) return next();
-    
-    await deleteCandidateById(userId, candidateId);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('删除数据失败:', error);
-    res.status(500).json({ error: '删除数据失败' });
-  }
-});
+// 删除候选人数据已移至 routes/candidateRoutes.js
 
 // 预览无效候选人清理结果
 app.get('/api/candidates/cleanup-invalid-preview', async (req, res) => {
@@ -2300,21 +2011,7 @@ app.delete('/api/candidates/cleanup-invalid', async (req, res) => {
   }
 });
 
-// 清空所有数据（清空数据库中的候选人数据）
-app.delete('/api/candidates', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    console.log(`[清空数据] 用户 ${userId} 请求清空所有候选人数据`);
-
-    const deletedCount = await clearCandidatesForUser(userId);
-
-    console.log(`[清空数据] 成功删除 ${deletedCount} 条候选人数据`);
-    res.json({ success: true, deletedCount });
-  } catch (error) {
-    console.error('清空数据失败:', error);
-    res.status(500).json({ error: '清空数据失败', message: error.message });
-  }
-});
+// 清空所有数据已移至 routes/candidateRoutes.js
 
 // 讯飞虚拟人签名生成 API
 app.get('/api/xunfei/avatar-sign', (req, res) => {
