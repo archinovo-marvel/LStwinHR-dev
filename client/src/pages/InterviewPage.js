@@ -252,9 +252,9 @@ const InterviewPage = () => {
 
       // Merge AI result with evaluation
       const mergedEvaluation = {
-        ...response.data.interview,
+        ...(response.data.interview || {}),
         aiScores: aiScores,
-        totalScore: aiScores ? aiScores.totalScore : response.data.interview.totalScore
+        totalScore: aiScores ? aiScores.totalScore : (response.data.interview?.totalScore || 0)
       };
 
       setEvaluation(mergedEvaluation);
