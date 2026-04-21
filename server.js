@@ -881,69 +881,6 @@ async function removeCandidateResumeFile(candidate) {
   }
 }
 
-async function analyzeResumeWithTimeout(fileBuffer, fileExt, position, timeoutMs = RESUME_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      const timeoutError = new Error(`简历分析超时(${timeoutMs}ms)`);
-      timeoutError.code = 'RESUME_ANALYSIS_TIMEOUT';
-      reject(timeoutError);
-    }, timeoutMs);
-  });
-
-  return Promise.race([
-    resumeAnalysisService.analyze(fileBuffer, fileExt, position),
-    timeoutPromise
-  ]);
-}
-
-async function analyzeResumeWithLocalVLTimeout(fileBuffer, fileExt, position, options = {}, timeoutMs = LOCAL_VL_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      const timeoutError = new Error(`本地VL分析超时(${timeoutMs}ms)`);
-      timeoutError.code = 'LOCAL_VL_ANALYSIS_TIMEOUT';
-      reject(timeoutError);
-    }, timeoutMs);
-  });
-
-  return Promise.race([
-    resumeAnalysisService.analyzeWithLocalVL(fileBuffer, fileExt, position, {
-      ...options,
-      timeoutMs
-    }),
-    timeoutPromise
-  ]);
-}
-
-async function analyzeResumeWithDeepSeekTimeout(fileBuffer, fileExt, position, options = {}, timeoutMs = DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      const timeoutError = new Error(`DeepSeek分析超时(${timeoutMs}ms)`);
-      timeoutError.code = 'DEEPSEEK_ANALYSIS_TIMEOUT';
-      reject(timeoutError);
-    }, timeoutMs);
-  });
-
-  return Promise.race([
-    resumeAnalysisService.analyzeWithDeepSeek(fileBuffer, fileExt, position, options),
-    timeoutPromise
-  ]);
-}
-
-async function analyzeResumeTextWithDeepSeekTimeout(text, position, options = {}, timeoutMs = DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      const timeoutError = new Error(`DeepSeek文本分析超时(${timeoutMs}ms)`);
-      timeoutError.code = 'DEEPSEEK_ANALYSIS_TIMEOUT';
-      reject(timeoutError);
-    }, timeoutMs);
-  });
-
-  return Promise.race([
-    resumeAnalysisService.analyzeText(text, position, options),
-    timeoutPromise
-  ]);
-}
-
 function getJimpReader() {
   return Jimp?.read || Jimp?.Jimp?.read;
 }
@@ -959,23 +896,17 @@ function getJimpBufferAsync(image, mimeType, options) {
   if (typeof image.getBufferAsync === 'function') {
     return image.getBufferAsync(mimeType, options);
   }
-
   if (typeof image.getBuffer === 'function') {
     if (image.getBuffer.length <= 2) {
       return image.getBuffer(mimeType, options);
     }
-
     return new Promise((resolve, reject) => {
       image.getBuffer(mimeType, options, (error, buffer) => {
-        if (error) {
-          reject(error);
-          return;
-        }
+        if (error) { reject(error); return; }
         resolve(buffer);
       });
     });
   }
-
   throw new Error('Jimp导出Buffer方法不可用');
 }
 
@@ -983,474 +914,68 @@ async function compressImageBufferIfNeeded(buffer, fileExt) {
   if (!buffer || !['.jpg', '.jpeg', '.png'].includes(fileExt)) {
     return { buffer, compressed: false };
   }
-
   const readImage = getJimpReader();
   if (!readImage) {
     return { buffer, compressed: false };
   }
-
   try {
     const image = await readImage.call(Jimp?.Jimp || Jimp, buffer);
     const maxEdge = 1280;
     const width = image.bitmap?.width || 0;
     const height = image.bitmap?.height || 0;
-
-    console.log(`图片压缩前尺寸: ${width}x${height}, 大小: ${buffer.length} bytes`);
-
     if (width > maxEdge || height > maxEdge) {
       image.scaleToFit({ w: maxEdge, h: maxEdge });
     }
-
-    // 恢复到最早的OCR预处理策略：灰度化 + 轻度增强 + 强制较高压缩比
-    if (typeof image.greyscale === 'function') {
-      image.greyscale();
-    } else if (typeof image.grayscale === 'function') {
-      image.grayscale();
-    }
-    if (typeof image.normalize === 'function') {
-      image.normalize();
-    }
-    if (typeof image.contrast === 'function') {
-      image.contrast(0.12);
-    }
-
-    const outputMimeType = 'image/jpeg';
-    const compressedBuffer = await getJimpBufferAsync(image, outputMimeType, { quality: 55 });
-
+    if (typeof image.greyscale === 'function') image.greyscale();
+    else if (typeof image.grayscale === 'function') image.grayscale();
+    if (typeof image.normalize === 'function') image.normalize();
+    if (typeof image.contrast === 'function') image.contrast(0.12);
+    const compressedBuffer = await getJimpBufferAsync(image, 'image/jpeg', { quality: 55 });
     if (compressedBuffer?.length) {
-      console.log(`图片压缩完成: ${buffer.length} -> ${compressedBuffer.length} bytes (quality=55)`);
       return { buffer: compressedBuffer, compressed: compressedBuffer.length < buffer.length };
     }
-
-    console.log(`图片压缩失败后回退原图: ${buffer.length} bytes`);
     return { buffer, compressed: false };
   } catch (error) {
-    console.warn('图片压缩失败，继续使用原图:', error.message);
     return { buffer, compressed: false };
   }
 }
 
 async function optimizeResumeFileOnDisk(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  const supportedImageExtensions = ['.jpg', '.jpeg', '.png'];
-
-  if (!supportedImageExtensions.includes(ext)) {
-    return {
-      changed: false,
-      skipped: true,
-      reason: `当前未接入 ${ext || '未知格式'} 压缩器`
-    };
+  if (!['.jpg', '.jpeg', '.png'].includes(ext)) {
+    return { changed: false, skipped: true, reason: `当前未接入 ${ext || '未知格式'} 压缩器` };
   }
-
   const originalBuffer = await fs.readFile(filePath);
   const optimized = await compressImageBufferIfNeeded(originalBuffer, ext);
-
   if (!optimized.compressed || !optimized.buffer || optimized.buffer.length >= originalBuffer.length) {
-    return {
-      changed: false,
-      skipped: true,
-      reason: '压缩后未变小'
-    };
+    return { changed: false, skipped: true, reason: '压缩后未变小' };
   }
-
   await fs.writeFile(filePath, optimized.buffer);
-  return {
-    changed: true,
-    beforeSize: originalBuffer.length,
-    afterSize: optimized.buffer.length
-  };
+  return { changed: true, beforeSize: originalBuffer.length, afterSize: optimized.buffer.length };
 }
 
 async function optimizeExistingResumeFiles() {
   try {
-    if (!fsSync.existsSync(RESUME_UPLOAD_DIR)) {
-      return;
-    }
-
+    if (!fsSync.existsSync(RESUME_UPLOAD_DIR)) return;
     const files = await fs.readdir(RESUME_UPLOAD_DIR);
-    let optimizedCount = 0;
-    let skippedCount = 0;
-
+    let optimizedCount = 0, skippedCount = 0;
     for (const fileName of files) {
       const filePath = path.join(RESUME_UPLOAD_DIR, fileName);
       try {
         const result = await optimizeResumeFileOnDisk(filePath);
-
-        if (result.changed) {
-          optimizedCount += 1;
-          console.log(`历史简历压缩完成: ${fileName} (${result.beforeSize} -> ${result.afterSize} bytes)`);
-        } else {
-          skippedCount += 1;
-        }
+        if (result.changed) { optimizedCount += 1; }
+        else { skippedCount += 1; }
       } catch (error) {
         console.warn(`压缩简历文件失败: ${fileName}`, error.message);
       }
     }
-
     console.log(`历史简历批量压缩处理完成: 优化 ${optimizedCount} 个，跳过 ${skippedCount} 个`);
   } catch (error) {
     console.error('历史简历批量压缩处理失败:', error);
   }
 }
 
-function createPendingResumeAnalysis(summary = '简历分析已加入后台队列，请稍候查看结果') {
-  return {
-    parseStatus: 'PENDING',
-    summary,
-    totalScore: 0,
-    dimensionScores: {},
-    strengths: [],
-    risks: [],
-    suggestions: ['后台正在分析简历，请稍候在候选管理中查看结果'],
-    extractedContent: {},
-    evidences: []
-  };
-}
-
-function calculateCandidateScores(candidate, resumeAnalysis) {
-  let finalMatchScore = 0;
-  let mbtiScore = 0;
-  let resumeScore = 0;
-
-  if (candidate?.mbti) {
-    const mbtiScores = {
-      'ENTJ': 90, 'INTJ': 88, 'ENTP': 85, 'INTP': 82,
-      'ENFJ': 85, 'INFJ': 88, 'ENFP': 80, 'INFP': 78,
-      'ESTJ': 88, 'ISTJ': 85, 'ESTP': 82, 'ISTP': 80,
-      'ESFJ': 85, 'ISFJ': 82, 'ESFP': 78, 'ISFP': 75
-    };
-    mbtiScore = mbtiScores[candidate.mbti] || 75;
-  }
-
-  const isSuccess = resumeAnalysis?.parseStatus === 'SUCCESS' || resumeAnalysis?.parseStatus === 'PARTIAL_SUCCESS';
-
-  // 简历评分统一使用细则评分之和
-  if (resumeAnalysis && isSuccess) {
-    const scores = resumeAnalysis.scores || {};
-    resumeScore = scores.resumeScore ||
-      (Number(scores.educationScore) || 0) +
-      (Number(scores.workScore) || 0) +
-      (Number(scores.projectScore) || 0) +
-      (Number(scores.skillScore) || 0) +
-      (Number(scores.expressionScore) || 0);
-  }
-
-  if (candidate?.mbti && isSuccess) {
-    finalMatchScore = Math.round((mbtiScore * 0.5) + (resumeScore * 0.5));
-  } else if (candidate?.mbti) {
-    finalMatchScore = mbtiScore;
-  } else if (isSuccess) {
-    finalMatchScore = resumeScore;
-  } else {
-    finalMatchScore = 60;
-  }
-
-  return {
-    finalMatchScore,
-    mbtiScore,
-    resumeScore
-  };
-}
-
-function getResumeAnalysisTimeoutMs(fileExt) {
-  if (['.jpg', '.jpeg', '.png'].includes(String(fileExt).toLowerCase())) {
-    return IMAGE_RESUME_ANALYSIS_TIMEOUT_MS;
-  }
-  return RESUME_ANALYSIS_TIMEOUT_MS;
-}
-
-function getLocalVlAnalysisTimeoutMs(candidate, fileExt, options = {}) {
-  const ext = String(fileExt || '').toLowerCase();
-  if (ext === '.pdf' && (candidate?.name === '陈龙' || String(candidate?.resumeFileName || '').includes('陈龙'))) {
-    return SCANNED_PDF_LOCAL_VL_ANALYSIS_TIMEOUT_MS;
-  }
-  return Number(options.localVlTimeoutMs || LOCAL_VL_ANALYSIS_TIMEOUT_MS);
-}
-
-function getDeepSeekFallbackTimeoutMs(fileExt, options = {}) {
-  const ext = String(fileExt || '').toLowerCase();
-  const baselineTimeout = ['.jpg', '.jpeg', '.png'].includes(ext)
-    ? IMAGE_RESUME_ANALYSIS_TIMEOUT_MS
-    : RESUME_ANALYSIS_TIMEOUT_MS;
-  return Number(options.deepseekTimeoutMs || Math.max(DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS, baselineTimeout));
-}
-
-async function runResumeAnalysisInBackground(candidateId, options = {}) {
-  if (activeResumeAnalysisJobs.has(candidateId)) {
-    return activeResumeAnalysisJobs.get(candidateId);
-  }
-
-  const { renameAfterAnalysis = false, forceReanalyze = false, trigger = 'auto' } = options;
-
-  if (trigger === 'auto' && manualResumeAnalysisJobs.size > 0) {
-    console.log(`[自动分析] 检测到手动分析任务进行中，跳过自动派发 candidateId=${candidateId}`);
-    return;
-  }
-
-  if (trigger === 'manual') {
-    manualResumeAnalysisJobs.add(candidateId);
-  }
-  const job = (async () => {
-    try {
-      console.log(`[后台分析] 开始获取候选人数据, candidateId=${candidateId}`);
-      
-      // 从数据库获取候选人数据（通过全局ID查询）
-      const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: true });
-
-      if (!candidate) {
-        console.log(`后台简历分析: 未找到候选人(candidateId=${candidateId})`);
-        return;
-      }
-
-      console.log(`[后台分析] 候选人数据获取成功:`, {
-        id: candidate.id,
-        name: candidate.name,
-        position: candidate.position,
-        hasResumeFileBuffer: !!candidate.resumeFileBuffer,
-        resumeFileBufferSize: candidate.resumeFileBuffer ? candidate.resumeFileBuffer.length : 0,
-        resumeFileName: candidate.resumeFileName,
-        resumeFilePath: candidate.resumeFilePath
-      });
-      if (!candidate.resumeFilePath && !candidate.resumeFileBuffer) {
-        console.log(`[后台分析] 候选人没有简历文件`);
-        await updateCandidateById(candidateId, {
-          status: '待分析',
-          recommendation: '未找到简历文件，无法分析'
-        });
-        return;
-      }
-
-      let fileBuffer;
-      let fileExt;
-
-      // 优先使用内存中的文件
-      if (candidate.resumeFileBuffer) {
-        fileBuffer = candidate.resumeFileBuffer;
-        fileExt = candidate.resumeFileName ? path.extname(candidate.resumeFileName).toLowerCase() : '.pdf';
-      } else if (candidate.resumeFilePath) {
-        try {
-          await fs.access(candidate.resumeFilePath);
-        } catch (error) {
-          await updateCandidateById(candidateId, {
-            status: '待分析',
-            recommendation: '简历文件已丢失，无法分析'
-          });
-          return;
-        }
-        fileBuffer = await fs.readFile(candidate.resumeFilePath);
-        fileExt = path.extname(candidate.resumeFilePath).toLowerCase();
-      } else {
-        await updateCandidateById(candidateId, {
-          status: '待分析',
-          recommendation: '未找到简历文件，无法分析'
-        });
-        return;
-      }
-
-      const localVlTimeoutMs = getLocalVlAnalysisTimeoutMs(candidate, fileExt, options);
-      const timeoutMs = Math.max(getResumeAnalysisTimeoutMs(fileExt), localVlTimeoutMs);
-      const deepseekTimeoutMs = getDeepSeekFallbackTimeoutMs(fileExt, options);
-      let resumeAnalysis;
-      let usedLocalVL = false;
-      let localVLTimedOut = false;
-      let cachedExtractedText = '';
-      let cachedExtractedMeta = null;
-      const updateAnalysisStage = async (status, recommendation) => {
-        await updateCandidateById(candidateId, {
-          status,
-          recommendation: recommendation || status
-        });
-      };
-      const updateCachedExtractedText = async (text, meta = {}) => {
-        const normalizedText = String(text || '').trim();
-        if (!normalizedText) {
-          return;
-        }
-        if (normalizedText.length >= String(cachedExtractedText || '').trim().length) {
-          cachedExtractedText = normalizedText;
-          cachedExtractedMeta = meta;
-          console.log(`[简历分析] 已缓存OCR文本，长度: ${normalizedText.length}，来源: ${meta.source || 'unknown'}`);
-        }
-      };
-
-      // 检查本地VL模型是否启用
-      const localVLEnabled = process.env.LOCAL_LLM_ENABLED === 'true';
-      
-      if (localVLEnabled) {
-        // 本地VL模型已启用，尝试使用
-        console.log(`[简历分析] 本地VL模型已启用，开始分析...`);
-        await updateAnalysisStage('VL分析准备中', '正在准备本地VL分析任务');
-        try {
-          resumeAnalysis = await analyzeResumeWithLocalVLTimeout(
-            fileBuffer,
-            fileExt,
-            candidate.position,
-            {
-              originalName: candidate.resumeFileName,
-              onProgress: updateAnalysisStage,
-              onExtractedText: updateCachedExtractedText
-            },
-            localVlTimeoutMs
-          );
-          
-          // 检查分析是否成功
-          if (resumeAnalysis.parseStatus === 'SUCCESS' || resumeAnalysis.parseStatus === 'PARTIAL_SUCCESS') {
-            usedLocalVL = true;
-            console.log(`[简历分析] 本地VL模型分析完成，状态: ${resumeAnalysis.parseStatus}`);
-          } else {
-            // VL分析失败，降级到DeepSeek
-            console.log(`[简历分析] 本地VL模型分析未成功(${resumeAnalysis.parseStatus})，降级到DeepSeek...`);
-            throw new Error(resumeAnalysis.error || 'VL分析失败');
-          }
-        } catch (vlError) {
-          console.error(`[简历分析] 本地VL模型分析失败:`, vlError.message);
-          if (vlError.code === 'LOCAL_VL_ANALYSIS_TIMEOUT') {
-            localVLTimedOut = true;
-            console.error(`[简历分析] 本地VL模型在 ${localVlTimeoutMs}ms 内未完成，标记为超时`);
-            await updateAnalysisStage('VL分析超时', `本地VL分析超时，已达到 ${Math.round(localVlTimeoutMs / 1000)}s 上限`);
-          }
-          // 本地VL失败时，尝试DeepSeek作为备用
-          console.log(`[简历分析] 尝试使用DeepSeek作为备用...`);
-          await updateAnalysisStage(
-            'DeepSeek分析中',
-            cachedExtractedText
-              ? '本地VL未完成，正在复用OCR文本切换到DeepSeek分析'
-              : '本地VL OCR未成功，正在切换到DeepSeek备用分析'
-          );
-          try {
-            if (cachedExtractedText) {
-              resumeAnalysis = await analyzeResumeTextWithDeepSeekTimeout(
-                cachedExtractedText,
-                candidate.position,
-                {
-                  originalName: candidate.resumeFileName,
-                  parserStatus: cachedExtractedMeta?.parserStatus || '',
-                  parserError: cachedExtractedMeta?.parserError || '',
-                  parserMetadata: cachedExtractedMeta?.parserMetadata || {},
-                  fileType: fileExt
-                },
-                deepseekTimeoutMs
-              );
-            } else {
-              resumeAnalysis = await analyzeResumeWithDeepSeekTimeout(
-                fileBuffer,
-                fileExt,
-                candidate.position,
-                {
-                  originalName: candidate.resumeFileName
-                },
-                deepseekTimeoutMs
-              );
-            }
-            console.log(`[简历分析] DeepSeek分析完成`);
-          } catch (dsError) {
-            console.error(`[简历分析] DeepSeek也失败:`, dsError.message);
-            resumeAnalysis = createFallbackResumeAnalysis(
-              `简历分析失败，本地VL和DeepSeek都无法完成分析`,
-              '请检查简历文件格式或联系管理员'
-            );
-          }
-        }
-      } else {
-        // 本地VL模型未启用，直接使用DeepSeek
-        console.log(`[简历分析] 本地VL模型未启用，使用DeepSeek进行分析...`);
-        try {
-          await updateAnalysisStage('DeepSeek分析中', '本地VL未启用，正在使用DeepSeek分析');
-          resumeAnalysis = await analyzeResumeWithDeepSeekTimeout(
-            fileBuffer,
-            fileExt,
-            candidate.position,
-            {
-              originalName: candidate.resumeFileName
-            },
-            deepseekTimeoutMs
-          );
-          console.log(`[简历分析] DeepSeek分析完成`);
-        } catch (dsError) {
-          console.error(`[简历分析] DeepSeek分析失败:`, dsError.message);
-          resumeAnalysis = createFallbackResumeAnalysis(
-            `简历分析失败: ${dsError.message}`,
-            '请检查简历文件格式或联系管理员'
-          );
-        }
-      }
-
-      const { finalMatchScore, mbtiScore, resumeScore } = calculateCandidateScores(candidate, resumeAnalysis);
-      const analysisSummary = String(resumeAnalysis.summary || resumeAnalysis.error || '');
-
-      let status = '待分析';
-      if (resumeAnalysis.parseStatus === 'SUCCESS' || resumeAnalysis.parseStatus === 'PARTIAL_SUCCESS') {
-        status = usedLocalVL ? '已分析(VL)' : '已分析';
-      } else if (localVLTimedOut || analysisSummary.includes('超时')) {
-        status = 'VL分析超时';
-      }
-      
-      const suggestions = resumeAnalysis.suggestions || [];
-      const recommendation = suggestions.length > 0 ? suggestions[0] : '建议进一步评估';
-
-      // 构建前端期望的分析结果格式
-      const resumeAnalysisResult = reportService.buildResumeAnalysisResult({
-        analysis: resumeAnalysis,
-        position: candidate.position,
-        positionConfig: null,
-        mbtiScore: mbtiScore,
-        interviewScore: candidate.interviewScore || null
-      });
-
-      // 更新数据库中的候选人数据
-      await updateCandidateById(candidateId, {
-        resumeAnalysis: resumeAnalysis,
-        resumeAnalysisResult: resumeAnalysisResult,
-        matchScore: finalMatchScore,
-        mbtiScore: mbtiScore,
-        resumeScore: resumeScore,
-        status: status,
-        recommendation: recommendation
-      });
-
-      if (renameAfterAnalysis && resumeAnalysis.parseStatus === 'SUCCESS') {
-        candidate.matchScore = finalMatchScore;
-        await renameResumeFileIfNeeded(candidate, finalMatchScore);
-        await reconcileCandidateResumeFile(candidate, { normalizeName: false });
-      }
-
-      console.log(`后台简历分析完成(candidateId=${candidateId})，状态: ${status}`);
-    } catch (error) {
-      console.error(`后台简历分析任务异常(candidateId=${candidateId}):`, error);
-      try {
-        const isTimeout = error.code === 'LOCAL_VL_ANALYSIS_TIMEOUT' ||
-          error.code === 'RESUME_ANALYSIS_TIMEOUT' ||
-          String(error.message || '').includes('超时') ||
-          String(error.message || '').toLowerCase().includes('timeout');
-
-        await updateCandidateById(candidateId, {
-          status: isTimeout ? 'VL分析超时' : '待分析',
-          recommendation: isTimeout
-            ? `简历分析超时，请稍后重试（VL超时上限 ${Math.round(localVlTimeoutMs / 1000)}s）`
-            : '简历分析失败，请稍后重试'
-        });
-      } catch (updateError) {
-        console.error(`后台简历分析异常后更新候选人状态失败(candidateId=${candidateId}):`, updateError);
-      }
-    } finally {
-      if (trigger === 'manual') {
-        manualResumeAnalysisJobs.delete(candidateId);
-      }
-      activeResumeAnalysisJobs.delete(candidateId);
-    }
-  })();
-
-  activeResumeAnalysisJobs.set(candidateId, job);
-  return job;
-}
-
-function scheduleResumeAnalysis(candidateId, options = {}) {
-  setImmediate(() => {
-    runResumeAnalysisInBackground(candidateId, options).catch(error => {
-      console.error(`后台简历分析调度失败(candidateId=${candidateId}):`, error);
-    });
-  });
-}
+// scheduleResumeAnalysis 已移至 server/services/resumeAnalysis.js
 
 // 简历路由工厂函数
 const { createResumeRouter } = require('./routes/resume.routes');
@@ -1498,6 +1023,7 @@ app.use('/api', authRouter);
 app.use('/api', require('./routes/position.routes'));
 
 // 挂载候选人路由
+const { scheduleResumeAnalysis } = require('./services/resumeAnalysis');
 const { createCandidateRouter } = require('./routes/candidateRoutes');
 const { createCandidateSubmission } = require('./utils/candidateSubmission');
 
