@@ -1499,75 +1499,14 @@ app.use('/api', require('./routes/position.routes'));
 
 // 挂载候选人路由
 const { createCandidateRouter } = require('./routes/candidateRoutes');
+const { createCandidateSubmission } = require('./utils/candidateSubmission');
+
 const candidateRouter = createCandidateRouter({
   authMiddleware,
   publicSubmissionMiddleware: (req, res, next) => next(),
   upload,
-  createCandidateSubmission: async ({ body, file, owner }) => {
-    // Factory has closure access to server.js scope helpers
-    if (!owner) throw Object.assign(new Error('未授权，请先登录'), { statusCode: 401 });
-
-    await ensureCandidateDatabase(owner.id);
-    await ensureDataFile();
-
-    let resumeFilePath = null;
-    let resumeFileName = null;
-
-    if (file) {
-      try {
-        const uploadDir = path.join(__dirname, 'uploads', 'resumes');
-        if (!fsSync.existsSync(uploadDir)) fsSync.mkdirSync(uploadDir, { recursive: true });
-        const fileExt = path.extname(file.originalname).toLowerCase();
-        resumeFileName = buildUploadedResumeFileName(body.name, body.position, body.mbti, fileExt);
-        resumeFilePath = path.join(uploadDir, resumeFileName);
-        const processedUpload = await compressImageBufferIfNeeded(file.buffer, fileExt);
-        if (fsSync.existsSync(resumeFilePath)) {
-          const uniqueSuffix = `${Date.now()}_${Math.round(Math.random() * 1E6)}`;
-          const baseName = path.basename(resumeFileName, fileExt);
-          resumeFileName = `${baseName}_${uniqueSuffix}${fileExt}`;
-          resumeFilePath = path.join(uploadDir, resumeFileName);
-        }
-        await fs.writeFile(resumeFilePath, processedUpload.buffer);
-      } catch (error) {
-        console.error('保存文件失败:', error);
-      }
-    }
-
-    const provisionalScores = calculateCandidateScores(body, null);
-    const newCandidate = {
-      ...body,
-      id: generateCandidateId(),
-      ownerUserId: owner.id,
-      ownerUserName: owner.username || owner.email || '',
-      ownerUserEmail: owner.email || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      resumeFilePath,
-      resumeOriginalName: file ? file.originalname : null,
-      resumeFileName,
-      matchScore: provisionalScores.finalMatchScore,
-      mbtiScore: provisionalScores.mbtiScore,
-      resumeScore: provisionalScores.resumeScore,
-      resumeAnalysis: file ? createPendingResumeAnalysis() : null,
-      recommendation: file ? '简历分析排队中，请稍候查看结果' : '建议进一步评估',
-      hasInterview: false,
-      status: file ? '分析中' : '已提交'
-    };
-
-    if (newCandidate.resumeFilePath && fsSync.existsSync(newCandidate.resumeFilePath)) {
-      try {
-        const stats = await fs.stat(newCandidate.resumeFilePath);
-        newCandidate.resumeSize = String(stats.size);
-        newCandidate.resumeFileHash = await calculateFileHash(newCandidate.resumeFilePath);
-      } catch (error) { /* ignore */ }
-    }
-
-    if (file) newCandidate.resumeFileBuffer = file.buffer;
-    await upsertCandidateForUser(owner.id, newCandidate);
-    if (file) scheduleResumeAnalysis(newCandidate.id, { renameAfterAnalysis: true });
-
-    return newCandidate;
-  },
+  createCandidateSubmission: ({ body, file, owner }) =>
+    createCandidateSubmission({ body, file, owner, deps: { ensureCandidateDatabase, upsertCandidateForUser, scheduleResumeAnalysis, ensureDataFile, DATA_FILE } }),
   saveCandidateInterviewResult: async ({ user, payload }) => {
     const { candidateId, interviewScore, interviewDetails, interviewDate, interviewRecord, candidateSnapshot } = payload;
 
