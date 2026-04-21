@@ -1,6 +1,6 @@
 .candidate-detail-modal {
   background:
-    radial-gradient(circle at top right, rgba(47, 128, 237, 0.15), transparent 30%),
+    radial-gradient(circle at top right, rgba(74, 158, 207, 0.15), transparent 30%),
     radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.08), transparent 35%),
     linear-gradient(180deg, #f8faff 0%, #f5f8fc 50%, #fafbff 100%);
   padding: 6px;
@@ -37,7 +37,7 @@
   top: 0;
   bottom: 0;
   width: 4px;
-  background: linear-gradient(180deg, #2F80ED 0%, #10B981 50%, #F59E0B 100%);
+  background: linear-gradient(180deg, #4A9ECF 0%, #10B981 50%, #F59E0B 100%);
   border-radius: 4px 0 0 4px;
 }
 
@@ -91,7 +91,7 @@
   left: 0;
   width: 60px;
   height: 3px;
-  background: linear-gradient(90deg, #2F80ED, #10B981);
+  background: linear-gradient(90deg, #4A9ECF, #10B981);
   border-radius: 2px;
 }
 
@@ -169,7 +169,7 @@
 }
 
 .candidate-detail-meta-label .anticon {
-  color: #2F80ED;
+  color: #4A9ECF;
   font-size: 14px;
 }
 
@@ -214,7 +214,7 @@
   font-size: 52px;
   font-weight: 700;
   line-height: 1;
-  background: linear-gradient(135deg, #2F80ED 0%, #1C5FD4 100%);
+  background: linear-gradient(135deg, #4A9ECF 0%, #1C5FD4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -263,7 +263,7 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #2F80ED, #10B981);
+  background: linear-gradient(90deg, #4A9ECF, #10B981);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -320,7 +320,7 @@
 
 .candidate-detail-card-title .anticon {
   font-size: 18px;
-  color: #2F80ED;
+  color: #4A9ECF;
   padding: 8px;
   border-radius: 12px;
   background: rgba(47, 128, 237, 0.08);
@@ -400,7 +400,7 @@
   border-radius: 999px;
   padding: 8px 14px;
   background: linear-gradient(135deg, #eef4ff 0%, #e5efff 100%);
-  color: #2F80ED;
+  color: #4A9ECF;
   font-size: 12px;
   font-weight: 600;
   border: 1px solid rgba(47, 128, 237, 0.15);
@@ -589,12 +589,12 @@
 }
 
 .candidate-detail-suggestion-alert .ant-alert-icon {
-  color: #2F80ED !important;
+  color: #4A9ECF !important;
   font-size: 18px !important;
 }
 
 .candidate-detail-suggestion-alert .ant-alert-message {
-  color: #2F80ED !important;
+  color: #4A9ECF !important;
   font-weight: 600 !important;
   font-size: 14px !important;
 }
@@ -692,7 +692,7 @@
 
 .analysis-loading-spinner {
   font-size: 48px;
-  color: #2F80ED;
+  color: #4A9ECF;
   animation: spin 1.5s linear infinite;
   margin-bottom: 16px;
 }
@@ -774,9 +774,9 @@
 }
 
 .analysis-step.active .analysis-step-icon {
-  background: linear-gradient(135deg, #2F80ED 0%, #1C5FD4 100%);
+  background: linear-gradient(135deg, #4A9ECF 0%, #1C5FD4 100%);
   color: #FFFFFF;
-  border-color: #2F80ED;
+  border-color: #4A9ECF;
   box-shadow: 0 8px 24px rgba(47, 128, 237, 0.35);
   animation: icon-pulse 1.5s ease-in-out infinite;
 }
@@ -828,7 +828,7 @@
 }
 
 .analysis-step.active .analysis-step-desc {
-  color: #2F80ED;
+  color: #4A9ECF;
 }
 
 .analysis-step-line {
@@ -844,7 +844,7 @@
 }
 
 .analysis-step-line.completed {
-  background: linear-gradient(90deg, #10B981 0%, #2F80ED 100%);
+  background: linear-gradient(90deg, #10B981 0%, #4A9ECF 100%);
 }
 
 .analysis-loading-footer {
@@ -863,7 +863,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #2F80ED;
+  background: #4A9ECF;
   animation: dot-pulse 1.4s ease-in-out infinite;
 }
 
