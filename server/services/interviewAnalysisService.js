@@ -11,9 +11,11 @@ const DEFAULT_DIMENSION_SCORE = 5;
 const SYSTEM_PROMPT = '你是专业AI面试评分员。请对以下问答进行评分。\n\n问题：{question}\n回答：{answer}\n\n评分维度（每项0-10分）：\n- relevance: 相关性（回答是否切题）\n- depth: 深度（是否有专业深度）\n- clarity: 清晰度（表达是否清晰流畅）\n- completeness: 完整性（回答是否完整）\n\n请返回纯JSON（无markdown）：\n{"relevance":8,"depth":9,"clarity":7,"completeness":8,"comment":"一句话评语"}';
 
 function buildEvalPrompt(question, answer) {
+  const safeQuestion = JSON.stringify(String(question || ''));
+  const safeAnswer = JSON.stringify(String(answer || ''));
   return SYSTEM_PROMPT
-    .replace('{question}', question)
-    .replace('{answer}', answer);
+    .replace('{question}', safeQuestion)
+    .replace('{answer}', safeAnswer);
 }
 
 function getDefaultScores() {
@@ -28,7 +30,7 @@ function getDefaultScores() {
 
 function parseAIResponse(text) {
   const cleaned = text.replace(/```json\s*/i, '').replace(/```\s*/g, '').trim();
-  const match = cleaned.match(/\{[\s\S]*\}/);
+  const match = cleaned.match(/\{[\s\S]*?\}/);
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[0]);
