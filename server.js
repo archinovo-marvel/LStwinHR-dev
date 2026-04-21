@@ -1109,7 +1109,7 @@ app.use('/api', require('./routes/xunfei.routes'));
 // AI面试评分端点
 const interviewAnalysisService = require('./services/interviewAnalysisService');
 
-app.post('/api/interview/analyze', async (req, res) => {
+app.post('/api/interview/analyze', authMiddleware, async (req, res) => {
   try {
     const result = await interviewAnalysisService.evaluateInterview(req.body);
     res.json(result);
