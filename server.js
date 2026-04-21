@@ -1508,8 +1508,47 @@ const candidateRouter = createCandidateRouter({
     throw new Error('createCandidateSubmission not implemented');
   },
   saveCandidateInterviewResult: async ({ user, payload }) => {
-    // This function is not implemented - inline handlers are used for interview-score
-    throw new Error('saveCandidateInterviewResult not implemented');
+    const { candidateId, interviewScore, interviewDetails, interviewDate, interviewRecord, candidateSnapshot } = payload;
+
+    const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: false });
+    if (!candidate) {
+      const error = new Error('候选人不存在，无法回写面试分。请确认是从候选人列表中选择后开始的面试。');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const updateData = {
+      interviewScore,
+      interviewDetails,
+      interviewDate,
+      hasInterview: true
+    };
+
+    if (interviewRecord) {
+      const existingRecords = candidate.interviewRecords || [];
+      const updatedRecords = [...existingRecords, interviewRecord];
+      updateData.interviewRecords = updatedRecords;
+      updateData.latestInterviewRecord = interviewRecord;
+    }
+
+    const resumeScore = candidate.matchScore || 0;
+    const mbtiScore = candidate.mbtiScore || 0;
+    const finalScore = Math.round((resumeScore * 0.35) + (mbtiScore * 0.15) + (interviewScore * 0.5));
+    updateData.finalScore = finalScore;
+
+    const updatedCandidate = await updateCandidateById(candidateId, updateData);
+    if (!updatedCandidate) {
+      throw new Error('更新候选人数据失败');
+    }
+
+    return {
+      candidateId,
+      interviewScore,
+      resumeScore,
+      mbtiScore,
+      finalScore,
+      interviewRecordsCount: updateData.interviewRecords?.length || 0
+    };
   },
   listCandidatesForUser,
   deleteCandidateById,
@@ -1563,99 +1602,9 @@ async function ensureDataFile() {
   }
 }
 
-// 保存面试分和面试记录到候选人数据
-app.post('/api/candidates/interview-score', express.json(), async (req, res) => {
-  try {
-    const { candidateId, interviewScore, interviewDetails, interviewDate, interviewRecord, candidateSnapshot } = req.body;
-
-    console.log('保存面试分和面试记录请求:', {
-      candidateId,
-      interviewScore,
-      interviewDetails,
-      hasInterviewRecord: !!interviewRecord,
-      hasCandidateSnapshot: !!candidateSnapshot
-    });
-
-    // 首先获取候选人现有数据
-    const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: false });
-
-    if (!candidate) {
-      // 如果候选人不存在，尝试通过快照查找
-      if (candidateSnapshot) {
-        // 这里可以添加通过快照查找候选人的逻辑
-        // 但目前先返回错误
-        return res.status(404).json({ error: '候选人不存在，无法回写面试分。请确认是从候选人列表中选择后开始的面试。' });
-      }
-      return res.status(404).json({ error: '候选人不存在，无法回写面试分。请确认是从候选人列表中选择后开始的面试。' });
-    }
-
-    // 准备更新数据
-    const updateData = {
-      interviewScore: interviewScore,
-      interviewDetails: interviewDetails,
-      interviewDate: interviewDate,
-      hasInterview: true
-    };
-
-    // 处理面试记录
-    if (interviewRecord) {
-      // 获取现有面试记录
-      const existingRecords = candidate.interviewRecords || [];
-      // 添加新记录
-      const updatedRecords = [...existingRecords, interviewRecord];
-      updateData.interviewRecords = updatedRecords;
-      updateData.latestInterviewRecord = interviewRecord;
-
-      console.log('面试记录已保存:', {
-        candidateId,
-        sessionId: interviewRecord.sessionId,
-        totalRecords: updatedRecords.length
-      });
-    }
-
-    // 计算综合评分（简历分 + MBTI分 + 面试分）
-    const resumeScore = candidate.matchScore || 0;
-    const mbtiScore = candidate.mbtiScore || 0;
-    const finalScore = Math.round((resumeScore * 0.35) + (mbtiScore * 0.15) + (interviewScore * 0.5));
-    updateData.finalScore = finalScore;
-
-    // 更新候选人数据到数据库
-    const updatedCandidate = await updateCandidateById(candidateId, updateData);
-
-    if (!updatedCandidate) {
-      throw new Error('更新候选人数据失败');
-    }
-
-    console.log('面试分和面试记录保存成功:', {
-      candidateId,
-      interviewScore,
-      resumeScore,
-      mbtiScore,
-      finalScore,
-      interviewRecordsCount: updateData.interviewRecords?.length || 0
-    });
-
-    res.json({
-      success: true,
-      message: '面试分和面试记录保存成功',
-      data: {
-        candidateId,
-        interviewScore,
-        resumeScore,
-        mbtiScore,
-        finalScore,
-        interviewRecordsCount: updateData.interviewRecords?.length || 0
-      }
-    });
-
-  } catch (error) {
-    console.error('保存面试分失败:', error);
-    res.status(500).json({ error: '保存面试分失败: ' + error.message });
-  }
-});
-
 // 简历下载端点已移至 routes/candidateRoutes.js
 // 聊天路由已移至 routes/chat.routes.js
+// 面试分保存已移至 routes/candidateRoutes.js (saveCandidateInterviewResult factory)
 
 // 添加候选人数据
 app.post('/api/candidates', upload.single('resume'), async (req, res) => {
