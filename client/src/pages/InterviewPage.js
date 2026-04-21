@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Card, 
-  Button, 
-  Input, 
-  Select, 
-  message, 
-  Row, 
+import {
+  Card,
+  Button,
+  Input,
+  Select,
+  message,
+  Row,
   Col,
   Typography,
   Space,
@@ -14,8 +14,8 @@ import {
   Divider,
   Avatar
 } from 'antd';
-import { 
-  VideoCameraOutlined, 
+import {
+  VideoCameraOutlined,
   AudioOutlined,
   SendOutlined,
   UserOutlined,
@@ -25,6 +25,7 @@ import {
 import { motion } from 'framer-motion';
 import styled from 'styled-components';
 import axios from 'axios';
+import InterviewScoring from '../utils/interviewScoring';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -191,7 +192,7 @@ const InterviewPage = () => {
 
   const evaluateInterview = async () => {
     setIsEvaluating(true);
-    
+
     const botMessage = {
       id: Date.now() + 1,
       type: 'bot',
@@ -203,19 +204,48 @@ const InterviewPage = () => {
 
     try {
       const questions = interviewQuestions[selectedPosition] || interviewQuestions['前端开发工程师'];
-      const answers = messages
+      const candidateAnswers = messages
         .filter(msg => msg.type === 'user')
         .map(msg => msg.content);
 
+      // Call AI scoring
+      const scoring = new InterviewScoring();
+      const aiResult = await scoring.analyzeWithAI({
+        questions: questions,
+        candidateAnswers: candidateAnswers
+      });
+
+      // Save AI scoring result to candidate data
+      try {
+        await axios.post('/api/candidates/interview-score', {
+          candidateId: 'temp-candidate-id',
+          interviewResult: aiResult,
+          questions: questions,
+          candidateAnswers: candidateAnswers,
+          companyId: selectedCompany,
+          position: selectedPosition
+        });
+      } catch (saveError) {
+        console.warn('保存AI评分结果失败:', saveError);
+      }
+
+      // Also get the standard evaluation from backend
       const response = await axios.post('/api/interview', {
         candidateId: 'temp-candidate-id',
         questions: questions,
-        answers: answers,
+        answers: candidateAnswers,
         companyId: selectedCompany
       });
 
-      setEvaluation(response.data.interview);
-      
+      // Merge AI result with evaluation
+      const mergedEvaluation = {
+        ...response.data.interview,
+        aiScores: aiResult,
+        totalScore: aiResult.totalScore
+      };
+
+      setEvaluation(mergedEvaluation);
+
       const finalMessage = {
         id: Date.now() + 2,
         type: 'bot',
