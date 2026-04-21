@@ -1448,297 +1448,7 @@ function scheduleResumeAnalysis(candidateId, options = {}) {
 // 验证码存储（生产环境应使用Redis）
 const verificationCodes = new Map();
 
-// 测试数据库连接
-testConnection();
-
-// 验证邮件配置
-verifyEmailConfig();
-
-// 启动后异步批量优化历史上传的简历文件
-setImmediate(() => {
-  optimizeExistingResumeFiles().catch(error => {
-    console.error('启动时历史简历压缩任务失败:', error);
-  });
-});
-
-// ==================== 用户认证API ====================
-
-// 登录API
-app.post('/api/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ message: '用户名和密码不能为空' });
-    }
-    const [users] = await pool.query(
-      'SELECT * FROM User WHERE email = ? OR username = ?',
-      [username, username]
-    );
-    if (users.length === 0) {
-      return res.status(401).json({ message: '用户名或密码错误' });
-    }
-    const user = users[0];
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: '用户名或密码错误' });
-    }
-    const token = jwt.sign(
-      { id: user.id, email: user.email, username: user.username },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    res.json({
-      success: true,
-      message: '登录成功',
-      token,
-      user: {
-        id: user.id,
-        name: user.username,
-        email: user.email,
-        phone: user.phone,
-        company: user.company,
-        memberLevel: user.memberLevel || '普通会员',
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('登录错误:', error);
-    res.status(500).json({ message: '登录失败，请稍后重试' });
-  }
-});
-
-// 注册API
-app.post('/api/register', async (req, res) => {
-  try {
-    const { userId, phone, email, password, verificationCode } = req.body;
-    if (!userId || !phone || !email || !password) {
-      return res.status(400).json({ message: '请填写完整的注册信息' });
-    }
-    // 验证验证码
-    const storedCode = verificationCodes.get(email);
-    if (!storedCode || storedCode.code !== verificationCode) {
-      return res.status(400).json({ message: '验证码错误或已过期' });
-    }
-    if (Date.now() > storedCode.expiry) {
-      verificationCodes.delete(email);
-      return res.status(400).json({ message: '验证码已过期' });
-    }
-    // 检查用户名是否已存在
-    const [existingUsername] = await pool.query(
-      'SELECT * FROM User WHERE username = ?',
-      [userId]
-    );
-    if (existingUsername.length > 0) {
-      return res.status(400).json({ message: '用户名已被注册', field: 'userId' });
-    }
-    // 检查邮箱是否已存在
-    const [existingEmail] = await pool.query(
-      'SELECT * FROM User WHERE email = ?',
-      [email]
-    );
-    if (existingEmail.length > 0) {
-      return res.status(400).json({ message: '该邮箱已被注册', field: 'email' });
-    }
-    // 检查手机号是否已存在
-    const [existingPhone] = await pool.query(
-      'SELECT * FROM User WHERE phone = ?',
-      [phone]
-    );
-    if (existingPhone.length > 0) {
-      return res.status(400).json({ message: '该手机号已被注册', field: 'phone' });
-    }
-    // 加密密码
-    const hashedPassword = await bcrypt.hash(password, 10);
-    // 创建用户（包含phone、createdAt和updatedAt字段）
-    const now = new Date();
-    const [result] = await pool.query(
-      'INSERT INTO User (username, email, phone, password, role, systemCode, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [userId, email, phone, hashedPassword, 'USER', 'zplx', now, now]
-    );
-    // 删除已使用的验证码
-    verificationCodes.delete(email);
-    res.json({
-      success: true,
-      message: '注册成功',
-      user: {
-        id: result.insertId,
-        name: userId,
-        email: email,
-        phone: phone
-      }
-    });
-  } catch (error) {
-    console.error('注册错误:', error);
-    res.status(500).json({ message: '注册失败，请稍后重试' });
-  }
-});
-
-// 检查用户名/邮箱/手机号是否已存在（实时检测）
-app.post('/api/check-duplicate', async (req, res) => {
-  try {
-    const { field, value } = req.body;
-
-    if (!field || !value) {
-      return res.status(400).json({ success: false, message: '缺少检查字段或值' });
-    }
-
-    const trimmedValue = String(value).trim();
-    if (!trimmedValue) {
-      return res.json({ success: true, exists: false });
-    }
-
-    let query = '';
-    let fieldName = '';
-
-    switch (field) {
-      case 'userId':
-        query = 'SELECT id FROM User WHERE username = ?';
-        fieldName = '用户名';
-        break;
-      case 'email':
-        query = 'SELECT id FROM User WHERE email = ?';
-        fieldName = '邮箱';
-        break;
-      case 'phone':
-        query = 'SELECT id FROM User WHERE phone = ?';
-        fieldName = '手机号';
-        break;
-      default:
-        return res.status(400).json({ success: false, message: '不支持的检查字段' });
-    }
-
-    const [results] = await pool.query(query, [trimmedValue]);
-
-    if (results.length > 0) {
-      return res.json({
-        success: true,
-        exists: true,
-        message: `该${fieldName}已被注册`
-      });
-    }
-
-    res.json({ success: true, exists: false });
-  } catch (error) {
-    console.error('检查重复信息错误:', error);
-    res.status(500).json({ success: false, message: '检查失败，请稍后重试' });
-  }
-});
-
-app.post('/api/send-verification-code', async (req, res) => {
-  try {
-    const { email, type } = req.body;
-    if (!email) {
-      return res.status(400).json({ message: '请提供邮箱地址' });
-    }
-    // 验证邮箱格式
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: '请提供有效的邮箱地址' });
-    }
-    // 检查发送频率限制（60秒内不能重复发送）
-    const storedCode = verificationCodes.get(email);
-    if (storedCode && Date.now() < storedCode.expiry - 4 * 60 * 1000) {
-      const waitTime = Math.ceil((storedCode.expiry - 4 * 60 * 1000 - Date.now()) / 1000);
-      return res.status(429).json({ 
-        message: '发送过于频繁，请稍后再试',
-        waitTime 
-      });
-    }
-    // 生成6位验证码
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = Date.now() + 5 * 60 * 1000; // 5分钟过期
-    verificationCodes.set(email, { code, expiry });
-    // 发送邮件（带超时处理）
-    const mailOptions = {
-      from: `"${process.env.EMAIL_FROM_NAME || '孪数AI面试系统'}" <${process.env.EMAIL_FROM_ADDRESS || 'gaolu@lstwin.top'}>`,
-      to: email,
-      subject: type === 'reset' ? '密码重置验证码' : '邮箱验证码',
-      html: `
-        <div style="padding: 20px; background-color: #f5f5f5;">
-          <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px;">
-            <h2 style="color: #1890ff; text-align: center;">${type === 'reset' ? '密码重置验证码' : '邮箱验证'}</h2>
-            <p style="font-size: 16px; color: #333;">您好！</p>
-            <p style="font-size: 16px; color: #333;">您的验证码是：</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <span style="font-size: 32px; font-weight: bold; color: #1890ff; letter-spacing: 10px;">${code}</span>
-            </div>
-            <p style="font-size: 14px; color: #999;">验证码有效期为5分钟，请尽快使用。</p>
-            <p style="font-size: 14px; color: #999;">如果这不是您的操作，请忽略此邮件。</p>
-          </div>
-        </div>
-      `
-    };
-    // 使用Promise.race实现超时控制
-    const sendEmailWithTimeout = Promise.race([
-      emailTransporter.sendMail(mailOptions),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('邮件发送超时')), 15000)
-      )
-    ]);
-    await sendEmailWithTimeout;
-    res.json({ 
-      success: true, 
-      message: '验证码已发送至您的邮箱' 
-    });
-  } catch (error) {
-    console.error('发送验证码错误:', error.message);
-    // 根据错误类型返回不同的错误信息
-    if (error.message.includes('timeout') || error.message.includes('超时')) {
-      return res.status(504).json({ message: '邮件发送超时，请检查网络连接后重试' });
-    }
-    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-      return res.status(503).json({ message: '邮件服务暂时不可用，请稍后重试' });
-    }
-    if (error.code === 'EAUTH') {
-      return res.status(500).json({ message: '邮件服务认证失败，请联系管理员' });
-    }
-    res.status(500).json({ message: '发送验证码失败，请稍后重试' });
-  }
-});
-
-// 重置密码API
-app.post('/api/reset-password', async (req, res) => {
-  try {
-    const { username, email, verificationCode, newPassword } = req.body;
-    if (!username || !email || !verificationCode || !newPassword) {
-      return res.status(400).json({ message: '请填写完整信息' });
-    }
-    // 验证验证码
-    const storedCode = verificationCodes.get(email);
-    if (!storedCode || storedCode.code !== verificationCode) {
-      return res.status(400).json({ message: '验证码错误或已过期' });
-    }
-    if (Date.now() > storedCode.expiry) {
-      verificationCodes.delete(email);
-      return res.status(400).json({ message: '验证码已过期' });
-    }
-    // 查找用户
-    const [users] = await pool.query(
-      'SELECT * FROM User WHERE email = ? AND username = ?',
-      [email, username]
-    );
-    if (users.length === 0) {
-      return res.status(400).json({ message: '用户不存在' });
-    }
-    // 更新密码
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await pool.query(
-      'UPDATE User SET password = ? WHERE email = ? AND username = ?',
-      [hashedPassword, email, username]
-    );
-    // 删除已使用的验证码
-    verificationCodes.delete(email);
-    res.json({ 
-      success: true, 
-      message: '密码重置成功，请使用新密码登录' 
-    });
-  } catch (error) {
-    console.error('重置密码错误:', error);
-    res.status(500).json({ message: '重置密码失败，请稍后重试' });
-  }
-});
-
-// 验证Token中间件
+// 验证Token中间件（提取到此处供authRoutes使用）
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
@@ -1753,163 +1463,36 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// 获取当前用户信息
-app.get('/api/user/info', authMiddleware, async (req, res) => {
-  try {
-    const [users] = await pool.query(
-      'SELECT id, username, email, phone, company, memberLevel, role, createdAt, updatedAt FROM User WHERE id = ?',
-      [req.user.id]
-    );
-    if (users.length === 0) {
-      return res.status(404).json({ message: '用户不存在' });
-    }
-    res.json({ 
-      success: true, 
-      user: users[0] 
-    });
-  } catch (error) {
-    console.error('获取用户信息错误:', error);
-    res.status(500).json({ message: '获取用户信息失败' });
-  }
+// 创建并挂载模块化认证路由
+const { createAuthRouter } = require('./routes/authRoutes');
+const authRouter = createAuthRouter({
+  pool,
+  bcrypt,
+  jwt,
+  JWT_SECRET,
+  verificationCodes,
+  emailTransporter,
+  EMAIL_VERIFICATION_MODE: process.env.EMAIL_VERIFICATION_MODE,
+  authMiddleware,
+  createPublicSubmissionToken: () => null,
+  ensureCandidateDatabase,
+  emailFromName: process.env.EMAIL_FROM_NAME || '孛数AI面试系统',
+  emailFromAddress: process.env.EMAIL_FROM_ADDRESS || 'gaolu@lstwin.top'
 });
+app.use('/api', authRouter);
 
-// 更新用户信息
-app.put('/api/user/info', authMiddleware, async (req, res) => {
-  try {
-    const { username, phone, company } = req.body;
-    const userId = req.user.id;
-    // 先尝试更新所有字段
-    try {
-      await pool.query(
-        'UPDATE User SET username = ?, phone = ?, company = ?, updatedAt = NOW() WHERE id = ?',
-        [username, phone, company || null, userId]
-      );
-    } catch (updateError) {
-      // 如果更新失败（可能是字段不存在），只更新username和phone
-      console.log('完整更新失败，尝试只更新username和phone:', updateError.message);
-      await pool.query(
-        'UPDATE User SET username = ?, phone = ?, updatedAt = NOW() WHERE id = ?',
-        [username, phone, userId]
-      );
-    }
-    // 获取更新后的用户信息
-    const [users] = await pool.query(
-      'SELECT id, username, email, phone, memberLevel, role, createdAt, updatedAt FROM User WHERE id = ?',
-      [userId]
-    );
-    const userData = users[0];
-    // 尝试获取company（如果存在）
-    try {
-      const [extendedInfo] = await pool.query(
-        'SELECT company FROM User WHERE id = ?',
-        [userId]
-      );
-      if (extendedInfo[0]) {
-        userData.company = extendedInfo[0].company;
-      }
-    } catch (e) {
-      // 字段不存在，忽略
-    }
-    res.json({ 
-      success: true, 
-      message: '用户信息更新成功',
-      user: userData
-    });
-  } catch (error) {
-    console.error('更新用户信息错误:', error);
-    res.status(500).json({ message: '更新用户信息失败' });
-  }
+// 测试数据库连接
+testConnection();
+
+// 验证邮件配置
+verifyEmailConfig();
+
+// 启动后异步批量优化历史上传的简历文件
+setImmediate(() => {
+  optimizeExistingResumeFiles().catch(error => {
+    console.error('启动时历史简历压缩任务失败:', error);
+  });
 });
-
-// 修改密码
-app.put('/api/user/password', authMiddleware, async (req, res) => {
-  try {
-    const { oldPassword, newPassword } = req.body;
-    const userId = req.user.id;
-    // 获取用户当前密码
-    const [users] = await pool.query('SELECT password FROM User WHERE id = ?', [userId]);
-    if (users.length === 0) {
-      return res.status(404).json({ message: '用户不存在' });
-    }
-    // 验证原密码
-    const isPasswordValid = await bcrypt.compare(oldPassword, users[0].password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ message: '原密码错误' });
-    }
-    // 加密新密码
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    // 更新密码
-    await pool.query(
-      'UPDATE User SET password = ?, updatedAt = NOW() WHERE id = ?',
-      [hashedPassword, userId]
-    );
-    res.json({ 
-      success: true, 
-      message: '密码修改成功' 
-    });
-  } catch (error) {
-    console.error('修改密码错误:', error);
-    res.status(500).json({ message: '修改密码失败' });
-  }
-});
-
-// 删除用户账户
-app.delete('/api/user', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
-
-      // 用户特定的动态表名
-      const candidateTableName = `lstwin_candidates_user_${userId}_candidates`;
-      const positionTableName = `lstwin_candidates_user_${userId}_positions`;
-      const interviewTableName = `lstwin_candidates_user_${userId}_interview_sessions`;
-
-      // 删除候选人表（如果存在）
-      const [candidateTables] = await connection.query(
-        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
-        [candidateTableName]
-      );
-      if (candidateTables.length > 0) {
-        await connection.query(`DROP TABLE \`${candidateTableName}\``);
-      }
-
-      // 删除岗位表（如果存在）
-      const [positionTables] = await connection.query(
-        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
-        [positionTableName]
-      );
-      if (positionTables.length > 0) {
-        await connection.query(`DROP TABLE \`${positionTableName}\``);
-      }
-
-      // 删除面试表（如果存在）
-      const [interviewTables] = await connection.query(
-        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
-        [interviewTableName]
-      );
-      if (interviewTables.length > 0) {
-        await connection.query(`DROP TABLE \`${interviewTableName}\``);
-      }
-
-      // 删除用户记录
-      await connection.query('DELETE FROM User WHERE id = ?', [userId]);
-      await connection.commit();
-      res.json({ success: true, message: '账户注销成功' });
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
-  } catch (error) {
-    console.error('删除用户错误:', error);
-    res.status(500).json({ message: '账户注销失败' });
-  }
-});
-
-// ==================== 结束用户认证API ====================
 
 // 注意：express.json() 中间件会干扰multer的文件上传
 // 我们需要在特定路由中处理JSON解析
@@ -2330,78 +1913,74 @@ app.post('/api/analyze-resume/:id', async (req, res) => {
 app.post('/api/candidates/interview-score', express.json(), async (req, res) => {
   try {
     const { candidateId, interviewScore, interviewDetails, interviewDate, interviewRecord, candidateSnapshot } = req.body;
-    
-    console.log('保存面试分和面试记录请求:', { 
-      candidateId, 
-      interviewScore, 
+
+    console.log('保存面试分和面试记录请求:', {
+      candidateId,
+      interviewScore,
       interviewDetails,
       hasInterviewRecord: !!interviewRecord,
       hasCandidateSnapshot: !!candidateSnapshot
     });
-    
-    await ensureDataFile();
-    // 读取候选人数据
-    const candidates = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
-    
-    // 查找对应的候选人
-    let candidateIndex = candidates.findIndex(c => c.id == candidateId);
 
-    if (candidateIndex === -1 && candidateSnapshot) {
-      candidateIndex = candidates.findIndex(c =>
-        (candidateSnapshot.name && c.name === candidateSnapshot.name) &&
-        (
-          (candidateSnapshot.phone && c.phone === candidateSnapshot.phone) ||
-          (candidateSnapshot.email && c.email === candidateSnapshot.email)
-        )
-      );
-    }
+    // 首先获取候选人现有数据
+    const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: false });
 
-    if (candidateIndex === -1) {
+    if (!candidate) {
+      // 如果候选人不存在，尝试通过快照查找
+      if (candidateSnapshot) {
+        // 这里可以添加通过快照查找候选人的逻辑
+        // 但目前先返回错误
+        return res.status(404).json({ error: '候选人不存在，无法回写面试分。请确认是从候选人列表中选择后开始的面试。' });
+      }
       return res.status(404).json({ error: '候选人不存在，无法回写面试分。请确认是从候选人列表中选择后开始的面试。' });
     }
-    
-    // 更新候选人数据
-    candidates[candidateIndex].interviewScore = interviewScore;
-    candidates[candidateIndex].interviewDetails = interviewDetails;
-    candidates[candidateIndex].interviewDate = interviewDate;
-    candidates[candidateIndex].hasInterview = true;
-    
-    // 保存完整的面试记录
+
+    // 准备更新数据
+    const updateData = {
+      interviewScore: interviewScore,
+      interviewDetails: interviewDetails,
+      interviewDate: interviewDate,
+      hasInterview: true
+    };
+
+    // 处理面试记录
     if (interviewRecord) {
-      // 如果候选人还没有面试记录数组，创建一个
-      if (!candidates[candidateIndex].interviewRecords) {
-        candidates[candidateIndex].interviewRecords = [];
-      }
-      
-      // 添加新的面试记录
-      candidates[candidateIndex].interviewRecords.push(interviewRecord);
-      
-      // 保存最新的面试记录作为当前记录
-      candidates[candidateIndex].latestInterviewRecord = interviewRecord;
-      
+      // 获取现有面试记录
+      const existingRecords = candidate.interviewRecords || [];
+      // 添加新记录
+      const updatedRecords = [...existingRecords, interviewRecord];
+      updateData.interviewRecords = updatedRecords;
+      updateData.latestInterviewRecord = interviewRecord;
+
       console.log('面试记录已保存:', {
         candidateId,
         sessionId: interviewRecord.sessionId,
-        totalRecords: candidates[candidateIndex].interviewRecords.length
+        totalRecords: updatedRecords.length
       });
     }
-    
-    // 计算综合评分（简历分 + 面试分）
-    const resumeScore = parseInt(candidates[candidateIndex].matchScore) || 0;
-    const finalScore = Math.round((resumeScore * 0.6) + (interviewScore * 0.4));
-    candidates[candidateIndex].finalScore = finalScore;
-    
-    // 保存更新后的数据
-    await fs.writeFile(DATA_FILE, JSON.stringify(candidates, null, 2));
-    
+
+    // 计算综合评分（简历分 + MBTI分 + 面试分）
+    const resumeScore = candidate.matchScore || 0;
+    const mbtiScore = candidate.mbtiScore || 0;
+    const finalScore = Math.round((resumeScore * 0.35) + (mbtiScore * 0.15) + (interviewScore * 0.5));
+    updateData.finalScore = finalScore;
+
+    // 更新候选人数据到数据库
+    const updatedCandidate = await updateCandidateById(candidateId, updateData);
+
+    if (!updatedCandidate) {
+      throw new Error('更新候选人数据失败');
+    }
+
     console.log('面试分和面试记录保存成功:', {
       candidateId,
       interviewScore,
       resumeScore,
+      mbtiScore,
       finalScore,
-      interviewRecordsCount: candidates[candidateIndex].interviewRecords?.length || 0
+      interviewRecordsCount: updateData.interviewRecords?.length || 0
     });
-    
+
     res.json({
       success: true,
       message: '面试分和面试记录保存成功',
@@ -2409,14 +1988,15 @@ app.post('/api/candidates/interview-score', express.json(), async (req, res) => 
         candidateId,
         interviewScore,
         resumeScore,
+        mbtiScore,
         finalScore,
-        interviewRecordsCount: candidates[candidateIndex].interviewRecords?.length || 0
+        interviewRecordsCount: updateData.interviewRecords?.length || 0
       }
     });
-    
+
   } catch (error) {
     console.error('保存面试分失败:', error);
-    res.status(500).json({ error: '保存面试分失败' });
+    res.status(500).json({ error: '保存面试分失败: ' + error.message });
   }
 });
 
