@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const PageWrapper = styled.div`
   background: ${colors.bg};

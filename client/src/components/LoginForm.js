@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../context/AuthContext';
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 // 表单容器 - 确保所有元素宽度一致
 const FormWrapper = styled.div`

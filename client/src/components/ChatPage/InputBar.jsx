@@ -1,7 +1,7 @@
 import React from 'react';
 import { Select, Slider, Popover } from 'antd';
 import styled from 'styled-components';
-import { colors } from '../../../theme/colors';
+import { colors } from '../../theme/colors';
 
 // Icons
 const IconMic = ({ size = 20, color = 'currentColor', strokeWidth = 1.5 }) => (

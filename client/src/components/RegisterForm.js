@@ -4,7 +4,7 @@ import { UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyCertific
 import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 // 表单容器
 const FormWrapper = styled.div`

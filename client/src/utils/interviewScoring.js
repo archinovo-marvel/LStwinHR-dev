@@ -14,9 +14,9 @@ const INTERVIEW_SCORING_DEBUG = {
 
 class InterviewScoring {
   constructor() {
-    // 面试评分标准
+    // 面试评分标准 - 满分100分
     this.scoringCriteria = {
-      // 回答质量评分 (40分)
+      // 回答质量评分 (40分) - 核心评分，基于每个问题的回答
       answerQuality: {
         weight: 40,
         criteria: {
@@ -55,18 +55,22 @@ class InterviewScoring {
       }
     };
 
-    // 关键词评分规则
+    // 关键词评分规则 - 优化正向关键词权重
     this.keywordScoring = {
       positive: {
-        keywords: ['经验', '学习', '成长', '挑战', '团队', '创新', '目标', '规划', '责任', '贡献'],
+        keywords: ['经验', '学习', '成长', '挑战', '团队', '创新', '目标', '规划', '责任', '贡献', '成功', '完成', '实现'],
         score: 2
       },
       negative: {
-        keywords: ['不知道', '不清楚', '没有', '不会', '困难', '问题', '失败', '错误'],
-        score: -1
+        keywords: ['不知道', '不清楚', '没有', '不会', '失败', '放弃', '没办法'],
+        score: -2
       },
       professional: {
-        keywords: ['技能', '能力', '项目', '成果', '数据', '分析', '优化', '改进', '效率'],
+        keywords: ['技能', '能力', '项目', '成果', '数据', '分析', '优化', '改进', '效率', '方案', '解决', '设计', '架构'],
+        score: 3
+      },
+      leadership: {
+        keywords: ['带领', '负责', '主导', '指导', '协调', '组织', '管理'],
         score: 3
       }
     };
@@ -174,6 +178,11 @@ class InterviewScoring {
     } catch (e) {
       return '';
     }
+  }
+
+  // 计算面试评分（兼容旧调用方式）
+  calculateScore(conversationData) {
+    return this.analyzeInterviewConversation(conversationData);
   }
 
   // 分析面试对话记录
@@ -491,9 +500,9 @@ class InterviewScoring {
     };
   }
 
-  // 评估单个回答
+  // 评估单个回答 - 满分10分
   evaluateSingleAnswer(answer, question) {
-    let score = 0;
+    let score = 5; // 基础分5分
     const details = {};
 
     const debugEnabled = this.isDebugEnabled();
@@ -507,31 +516,48 @@ class InterviewScoring {
       this.debugLog('safeAnswer:', safeAnswer);
     }
 
-    // 回答长度分析
+    // 1. 回答长度分析 (最多+/-2分)
     const length = safeAnswer.length;
     details.length = length;
-    
-    if (length < 20) {
-      score -= 2; // 回答过短
-      if (debugEnabled) this.debugDelta('长度<20（回答过短）', -2, { length });
+
+    if (length < 10) {
+      score -= 3; // 回答过短，大幅扣分
+      if (debugEnabled) this.debugDelta('长度<10（回答过短）', -3, { length });
+    } else if (length < 30) {
+      score -= 1; // 回答较短
+      if (debugEnabled) this.debugDelta('长度<30（回答较短）', -1, { length });
+    } else if (length > 100) {
+      score += 1; // 回答较详细
+      if (debugEnabled) this.debugDelta('长度>100（回答较详细）', +1, { length });
     } else if (length > 200) {
-      score += 2; // 回答详细
-      if (debugEnabled) this.debugDelta('长度>200（回答详细）', +2, { length });
+      score += 2; // 回答非常详细
+      if (debugEnabled) this.debugDelta('长度>200（回答非常详细）', +2, { length });
     }
 
-    // 关键词分析
+    // 2. 关键词分析 (最多+/-3分)
     const keywordScore = this.analyzeKeywords(safeAnswer);
     details.keywords = keywordScore;
-    score += keywordScore.score;
-    if (debugEnabled) this.debugDelta('关键词得分（analyzeKeywords）', keywordScore.score, { foundKeywords: keywordScore.foundKeywords });
+    const keywordDelta = Math.min(Math.max(keywordScore.score, -3), 3);
+    score += keywordDelta;
+    if (debugEnabled) this.debugDelta('关键词得分（限制+/-3）', keywordDelta, { foundKeywords: keywordScore.foundKeywords });
 
-    // 相关性分析
+    // 3. 相关性分析 (最多+2分)
     const relevanceScore = this.analyzeRelevance(safeAnswer, safeQuestion);
     details.relevance = relevanceScore;
-    score += relevanceScore.score;
-    if (debugEnabled) this.debugDelta('相关性得分（analyzeRelevance）', relevanceScore.score, relevanceScore);
+    const relevanceDelta = Math.min(relevanceScore.score, 2);
+    score += relevanceDelta;
+    if (debugEnabled) this.debugDelta('相关性得分（限制+2）', relevanceDelta, relevanceScore);
 
-    const finalScore = Math.min(Math.max(score, 0), 10);
+    // 4. 结构化表达加分 (最多+1分)
+    const structureScore = this.analyzeStructure(safeAnswer);
+    details.structure = structureScore;
+    if (structureScore.hasStructure) {
+      score += 1;
+      if (debugEnabled) this.debugDelta('结构化表达加分', +1, structureScore);
+    }
+
+    // 限制在0-10分
+    const finalScore = Math.min(Math.max(Math.round(score), 0), 10);
 
     if (debugEnabled) {
       this.debugLog('rawSum(未 clamp):', score);
@@ -542,6 +568,21 @@ class InterviewScoring {
     return {
       score: finalScore,
       details: details
+    };
+  }
+
+  // 分析回答结构
+  analyzeStructure(text) {
+    const safeText = this.normalizeText(text);
+    const structureIndicators = {
+      hasNumbering: /^[一二三四五六七八九十1-9]/m.test(safeText) || /[首先其次然后最后]/.test(safeText),
+      hasLogic: /因为.*所以|如果.*那么|虽然.*但是/.test(safeText),
+      hasSummary: /总之|综上所述|总结/.test(safeText)
+    };
+
+    return {
+      hasStructure: structureIndicators.hasNumbering || structureIndicators.hasLogic,
+      details: structureIndicators
     };
   }
 
@@ -559,10 +600,15 @@ class InterviewScoring {
 
     Object.keys(this.keywordScoring).forEach(category => {
       this.keywordScoring[category].keywords.forEach(keyword => {
-        if (safeText.includes(keyword)) {
-          score += this.keywordScoring[category].score;
-          foundKeywords.push({ keyword, category, score: this.keywordScoring[category].score });
-          if (debugEnabled) this.debugDelta(`命中「${keyword}」(${category})`, this.keywordScoring[category].score);
+        // 统计关键词出现次数
+        const regex = new RegExp(keyword, 'g');
+        const matches = safeText.match(regex);
+        if (matches) {
+          const count = matches.length;
+          const categoryScore = this.keywordScoring[category].score * Math.min(count, 2); // 同一关键词最多计2次
+          score += categoryScore;
+          foundKeywords.push({ keyword, category, count, score: categoryScore });
+          if (debugEnabled) this.debugDelta(`命中「${keyword}」x${count}(${category})`, categoryScore);
         }
       });
     });

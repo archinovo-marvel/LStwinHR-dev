@@ -37,7 +37,7 @@ const { Option } = Select;
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 // 页面容器
 const FormContainer = styled.div`

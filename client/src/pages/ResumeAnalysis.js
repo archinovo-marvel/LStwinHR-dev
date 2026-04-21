@@ -120,7 +120,7 @@ const IconChevronUp = ({ size = 14, color = 'currentColor', strokeWidth = 1.5 })
 
 const { Option } = Select;
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const PageWrapper = styled.div`
   min-height: 100vh;

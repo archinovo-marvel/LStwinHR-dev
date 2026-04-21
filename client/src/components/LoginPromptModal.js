@@ -3,7 +3,7 @@ import { Modal, Button } from 'antd';
 import { LoginOutlined, UserOutlined } from '@ant-design/icons';
 import styled, { keyframes } from 'styled-components';
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const fadeIn = keyframes`
   from {

@@ -2,7 +2,7 @@ import React from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const fadeIn = keyframes`
   from {

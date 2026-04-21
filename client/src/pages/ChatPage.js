@@ -13,7 +13,7 @@ import { VirtualHumanPanel } from '../components/ChatPage';
 import { InterviewResults } from '../components/ChatPage';
 import { QuickBar } from '../components/ChatPage';
 import { shouldInjectCompanyContext, buildCompanyContextPrompt, quickQuestions } from '../components/ChatPage/constants';
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const VIRTUAL_HUMAN_ENABLED = process.env.REACT_APP_VIRTUAL_HUMAN_ENABLED === 'true';
 

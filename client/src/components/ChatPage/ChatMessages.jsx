@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import styled from 'styled-components';
-import { colors } from '../../../theme/colors';
+import { colors } from '../../theme/colors';
 
 // Icons
 const IconBot = ({ size = 20, color = '#FFFFFF', strokeWidth = 1.5 }) => (

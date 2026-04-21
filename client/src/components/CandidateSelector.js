@@ -9,7 +9,7 @@ const { Option } = Select;
 const { Search } = Input;
 const { Text } = Typography;
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const StyledModal = styled(Modal)`
   .ant-modal-content {

@@ -6,15 +6,15 @@
   .ant-list-item {
     border-color: ButtonText;
   }
-  
+
   .ant-card {
     border-color: ButtonText;
   }
-  
+
   .ant-btn {
     border-color: ButtonText;
   }
-  
+
   .ant-input {
     border-color: ButtonText;
   }
@@ -25,17 +25,149 @@
   .ant-list-item {
     border-color: ButtonText;
   }
-  
+
   .ant-card {
     border-color: ButtonText;
   }
-  
+
   .ant-btn {
     border-color: ButtonText;
   }
-  
+
   .ant-input {
     border-color: ButtonText;
   }
 }
 
+/* Ant Design Modal 全局样式 - 匹配站点UI风格 */
+.ant-modal-content {
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
+.ant-modal-header {
+  border-radius: 16px 16px 0 0;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid #D4E3ED;
+}
+
+.ant-modal-title {
+  font-family: 'Noto Serif SC', Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: #1A2A3A;
+}
+
+.ant-modal-body {
+  padding: 24px 28px;
+}
+
+.ant-modal-footer {
+  border-top: 1px solid #D4E3ED;
+  padding: 16px 28px 24px;
+  margin-top: 0;
+}
+
+.ant-modal-close-x {
+  color: #6B7C8D;
+  font-size: 18px;
+}
+
+/* Ant Design Confirm Modal 全局样式 */
+.ant-modal-confirm .ant-modal-content {
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.ant-modal-confirm .ant-modal-body {
+  padding: 28px 28px 24px;
+}
+
+.ant-modal-confirm-title {
+  font-family: 'Noto Serif SC', Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: #1A2A3A;
+}
+
+.ant-modal-confirm-content {
+  font-size: 14px;
+  color: #6B7C8D;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+
+.ant-btn-dangerous {
+  background: #FFFFFF;
+  border-color: #EF4444;
+  color: #EF4444;
+}
+
+.ant-btn-dangerous:hover {
+  background: #EF4444 !important;
+  border-color: #EF4444 !important;
+  color: #FFFFFF !important;
+}
+
+/* Ant Design Select 下拉样式 */
+.ant-select-dropdown {
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+}
+
+.ant-select-item {
+  border-radius: 8px;
+  margin: 4px 8px;
+}
+
+.ant-select-item-option-selected {
+  background: #E8F4FA !important;
+}
+
+/* Ant Design Input 样式 */
+.ant-input {
+  border-radius: 10px;
+}
+
+.ant-input:hover,
+.ant-input:focus {
+  border-color: #4A9ECF;
+  box-shadow: 0 0 0 3px rgba(74, 158, 207, 0.1);
+}
+
+/* Ant Design Select 样式 */
+.ant-select-selector {
+  border-radius: 10px !important;
+}
+
+.ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+  border-color: #4A9ECF;
+}
+
+/* Ant Design DatePicker 样式 */
+.ant-picker {
+  border-radius: 10px;
+}
+
+.ant-picker:hover {
+  border-color: #4A9ECF;
+}
+
+/* Ant Design Button 样式 */
+.ant-btn-primary {
+  background: #4A9ECF;
+  border-color: #4A9ECF;
+  box-shadow: none;
+}
+
+.ant-btn-primary:hover {
+  background: #3A8DC4 !important;
+  border-color: #3A8DC4 !important;
+}
+
+.ant-btn-default:hover {
+  color: #4A9ECF;
+  border-color: #4A9ECF;
+}

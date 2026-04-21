@@ -11,6 +11,7 @@ import RegisterPage from './pages/RegisterPage';
 
 // 页面组件
 import HomePage from './pages/HomePage';
+import DashboardPage from './pages/DashboardPage';
 import ChatPage from './pages/ChatPage';
 import ResumeUpload from './pages/ResumeUpload';
 import CandidateForm from './pages/CandidateForm';
@@ -106,6 +107,7 @@ function App() {
                 <Layout>
                   <Routes>
                     <Route path="/" element={<HomePage />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/chat" element={<ChatPage />} />
                     <Route path="/resume" element={<ResumeUpload />} />
                     <Route path="/resume-analysis" element={<ResumeAnalysis />} />

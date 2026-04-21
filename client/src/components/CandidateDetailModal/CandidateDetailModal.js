@@ -29,7 +29,7 @@ import './CandidateDetailModal.css';
 
 const { Title, Text } = Typography;
 
-import { colors } from '../../../theme/colors';
+import { colors } from '../../theme/colors';
 
 const StyledModal = styled(Modal)`
   .ant-modal-content {

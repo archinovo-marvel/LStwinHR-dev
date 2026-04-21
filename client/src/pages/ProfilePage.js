@@ -24,7 +24,7 @@ import { getCandidateStats } from '../utils/candidateStats';
 
 const { Title, Text, Paragraph } = Typography;
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 // 页面容器
 const PageContainer = styled.div`

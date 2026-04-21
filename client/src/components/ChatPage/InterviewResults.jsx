@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { colors } from '../../../theme/colors';
+import { colors } from '../../theme/colors';
 
 // Styles
 const ResultsCardWrapper = styled.div`

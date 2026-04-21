@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 const { Content } = AntLayout;
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const StyledLayout = styled(AntLayout)`
   min-height: 100vh;

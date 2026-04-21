@@ -60,7 +60,7 @@ const IconCheck = ({ size = 18, color, strokeWidth = 2 }) => (
   </svg>
 );
 
-import { colors } from '../../theme/colors';
+import { colors } from '../theme/colors';
 
 const PageWrapper = styled.div`
   background: ${colors.bg};

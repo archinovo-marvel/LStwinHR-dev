@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  Table, 
-  Button, 
-  Tag, 
-  Space, 
-  Typography, 
-  Row, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Card,
+  Table,
+  Button,
+  Tag,
+  Space,
+  Typography,
+  Row,
   Col,
   Statistic,
   Progress,
@@ -14,9 +14,9 @@ import {
   Input,
   message
 } from 'antd';
-import { 
-  UserOutlined, 
-  FileTextOutlined, 
+import {
+  UserOutlined,
+  FileTextOutlined,
   VideoCameraOutlined,
   TrophyOutlined,
   MessageOutlined
@@ -41,11 +41,7 @@ const AdminDashboard = () => {
   });
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       // 只获取候选人数据
@@ -99,7 +95,36 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // 监听面试分数保存事件，自动刷新数据
+  useEffect(() => {
+    const handleInterviewScoreSaved = () => {
+      console.log('收到面试分数保存事件，刷新候选人数据');
+      fetchData();
+    };
+
+    window.addEventListener('interviewScoreSaved', handleInterviewScoreSaved);
+
+    // 监听窗口焦点事件，当用户返回页面时刷新数据
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('窗口重新激活，刷新候选人数据');
+        fetchData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('interviewScoreSaved', handleInterviewScoreSaved);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchData]);
 
   const resumeColumns = [
     {

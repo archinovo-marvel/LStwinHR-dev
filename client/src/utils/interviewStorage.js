@@ -32,6 +32,11 @@ class InterviewStorage {
     }
   }
 
+  // 开始新的面试会话（对象形式）
+  startSession({ id, candidateId, candidateName, position }) {
+    return this.startInterviewSession(candidateId, candidateName, position);
+  }
+
   // 开始新的面试会话
   startInterviewSession(candidateId, candidateName, position) {
     const session = {
