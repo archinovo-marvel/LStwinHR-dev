@@ -367,6 +367,90 @@ function createAuthRouter({
     }
   });
 
+  router.post('/check-duplicate', async (req, res) => {
+    try {
+      const { field, value } = req.body;
+      if (!field || !value) {
+        return res.status(400).json({ success: false, message: '缺少检查字段或值' });
+      }
+      const trimmedValue = String(value).trim();
+      if (!trimmedValue) {
+        return res.json({ success: true, exists: false });
+      }
+      let query = '';
+      let fieldName = '';
+      switch (field) {
+        case 'userId':
+          query = 'SELECT id FROM User WHERE username = ?';
+          fieldName = '用户名';
+          break;
+        case 'email':
+          query = 'SELECT id FROM User WHERE email = ?';
+          fieldName = '邮箱';
+          break;
+        case 'phone':
+          query = 'SELECT id FROM User WHERE phone = ?';
+          fieldName = '手机号';
+          break;
+        default:
+          return res.status(400).json({ success: false, message: '不支持的检查字段' });
+      }
+      const [results] = await pool.query(query, [trimmedValue]);
+      if (results.length > 0) {
+        return res.json({ success: true, exists: true, message: `该${fieldName}已被注册` });
+      }
+      res.json({ success: true, exists: false });
+    } catch (error) {
+      console.error('检查重复信息错误:', error);
+      res.status(500).json({ success: false, message: '检查失败，请稍后重试' });
+    }
+  });
+
+  router.delete('/user', authMiddleware, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+        const candidateTableName = `lstwin_candidates_user_${userId}_candidates`;
+        const positionTableName = `lstwin_candidates_user_${userId}_positions`;
+        const interviewTableName = `lstwin_candidates_user_${userId}_interview_sessions`;
+        const [candidateTables] = await connection.query(
+          "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+          [candidateTableName]
+        );
+        if (candidateTables.length > 0) {
+          await connection.query(`DROP TABLE \`${candidateTableName}\``);
+        }
+        const [positionTables] = await connection.query(
+          "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+          [positionTableName]
+        );
+        if (positionTables.length > 0) {
+          await connection.query(`DROP TABLE \`${positionTableName}\``);
+        }
+        const [interviewTables] = await connection.query(
+          "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+          [interviewTableName]
+        );
+        if (interviewTables.length > 0) {
+          await connection.query(`DROP TABLE \`${interviewTableName}\``);
+        }
+        await connection.query('DELETE FROM User WHERE id = ?', [userId]);
+        await connection.commit();
+        res.json({ success: true, message: '账户注销成功' });
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      console.error('删除用户错误:', error);
+      res.status(500).json({ message: '账户注销失败' });
+    }
+  });
+
   return router;
 }
 
