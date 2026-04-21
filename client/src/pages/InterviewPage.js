@@ -208,25 +208,38 @@ const InterviewPage = () => {
         .filter(msg => msg.type === 'user')
         .map(msg => msg.content);
 
-      // Call AI scoring
-      const scoring = new InterviewScoring();
-      const aiResult = await scoring.analyzeWithAI({
-        questions: questions,
-        candidateAnswers: candidateAnswers
-      });
-
-      // Save AI scoring result to candidate data
+      // Call AI scoring with silent degradation
+      let aiScores = null;
       try {
-        await axios.post('/api/candidates/interview-score', {
-          candidateId: 'temp-candidate-id',
-          interviewResult: aiResult,
+        const scoring = new InterviewScoring();
+        const aiResult = await scoring.analyzeWithAI({
           questions: questions,
-          candidateAnswers: candidateAnswers,
-          companyId: selectedCompany,
-          position: selectedPosition
+          candidateAnswers: candidateAnswers
         });
-      } catch (saveError) {
-        console.warn('保存AI评分结果失败:', saveError);
+        aiScores = {
+          questionScores: aiResult.questionScores,
+          totalScore: aiResult.totalScore,
+          summary: aiResult.summary
+        };
+      } catch (e) {
+        console.warn('AI评分失败:', e.message);
+        // Silent degradation - continue without AI scores
+      }
+
+      // Save AI scoring result to candidate data (if available)
+      if (aiScores) {
+        try {
+          await axios.post('/api/candidates/interview-score', {
+            candidateId: 'temp-candidate-id',
+            interviewScore: aiScores.totalScore,
+            interviewDetails: aiScores,
+            interviewDate: new Date().toISOString(),
+            interviewRecord: { questions, answers: candidateAnswers },
+            candidateSnapshot: { companyId: selectedCompany, position: selectedPosition }
+          });
+        } catch (saveError) {
+          console.warn('保存AI评分结果失败:', saveError);
+        }
       }
 
       // Also get the standard evaluation from backend
@@ -240,8 +253,8 @@ const InterviewPage = () => {
       // Merge AI result with evaluation
       const mergedEvaluation = {
         ...response.data.interview,
-        aiScores: aiResult,
-        totalScore: aiResult.totalScore
+        aiScores: aiScores,
+        totalScore: aiScores ? aiScores.totalScore : response.data.interview.totalScore
       };
 
       setEvaluation(mergedEvaluation);
