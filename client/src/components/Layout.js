@@ -4,9 +4,9 @@ import styled from 'styled-components';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const { Content } = AntLayout;
-
 import { colors } from '../theme/colors';
+
+const { Content } = AntLayout;
 
 const StyledLayout = styled(AntLayout)`
   min-height: 100vh;
@@ -152,20 +152,30 @@ const Layout = ({ children }) => {
     { label: '加入我们', action: () => scrollToSection('footer') },
   ];
 
-  const authNavLinks = [
+  // Get userType from user object (stored in localStorage via AuthContext)
+  const userType = user?.userType || 'CORP';
+
+  // Left side links — change based on userType
+  const leftLinks = userType === 'PERSONAL' ? [
+    { label: '关于我们', action: () => scrollToSection('statement') },
+    { label: '了解我们', action: () => scrollToSection('services') },
+    { label: '加入我们', action: () => scrollToSection('footer') },
+    { label: '简历优化', action: () => navigate('/personal/resume') },
+  ] : [
     { label: '关于我们', action: () => scrollToSection('statement') },
     { label: '了解我们', action: () => scrollToSection('services') },
     { label: '加入我们', action: () => scrollToSection('footer') },
     { label: '简历初筛', action: () => navigate('/resume') },
     { label: '候选管理', action: () => navigate('/resume-analysis') },
     { label: '面试访谈', action: () => navigate('/chat') },
-    { label: '个人资料', action: () => navigate('/profile') },
-    { label: '退出登录', action: () => { logout(); navigate('/'); } },
   ];
 
-  const navLinks = user ? authNavLinks : guestNavLinks;
-  const leftLinks = navLinks.slice(0, 3);
-  const rightLinks = navLinks.slice(3);
+  // Right side links — always these (except for guest)
+  const rightLinks = user ? [
+    { label: '个人资料', action: () => navigate('/profile') },
+    { label: `${user.name}欢迎回来`, action: () => {} },
+    { label: '退出登录', action: () => { logout(); navigate('/'); } },
+  ] : [];
 
   return (
     <StyledLayout>
