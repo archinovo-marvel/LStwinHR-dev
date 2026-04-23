@@ -3,6 +3,8 @@ const path = require('path');
 const { getPersonalUserDB } = require('../../db');
 const { resumeAnalysisService } = require('../../services/resume');
 
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
 function createPersonalResumeRouter({ authMiddleware, upload }) {
   const router = express.Router();
 
@@ -15,6 +17,10 @@ function createPersonalResumeRouter({ authMiddleware, upload }) {
 
     if (!req.file) {
       return res.status(400).json({ message: '请上传简历文件' });
+    }
+
+    if (req.file.size > MAX_SIZE) {
+      return res.status(400).json({ message: '文件大小超过限制（最大10MB）' });
     }
 
     try {
@@ -49,7 +55,7 @@ function createPersonalResumeRouter({ authMiddleware, upload }) {
       });
     } catch (error) {
       console.error('个人简历上传分析失败:', error);
-      res.status(500).json({ message: '简历分析失败: ' + error.message });
+      res.status(500).json({ message: '简历分析失败，请稍后重试' });
     }
   });
 
@@ -70,7 +76,7 @@ function createPersonalResumeRouter({ authMiddleware, upload }) {
       res.json(rows);
     } catch (error) {
       console.error('获取简历历史失败:', error);
-      res.status(500).json({ message: '获取历史记录失败: ' + error.message });
+      res.status(500).json({ message: '获取历史记录失败，请稍后重试' });
     }
   });
 
@@ -107,7 +113,7 @@ function createPersonalResumeRouter({ authMiddleware, upload }) {
       res.json(record);
     } catch (error) {
       console.error('获取简历详情失败:', error);
-      res.status(500).json({ message: '获取简历详情失败: ' + error.message });
+      res.status(500).json({ message: '获取简历详情失败，请稍后重试' });
     }
   });
 
@@ -190,7 +196,7 @@ function createPersonalResumeRouter({ authMiddleware, upload }) {
       res.json(updatedRecord);
     } catch (error) {
       console.error('更新简历失败:', error);
-      res.status(500).json({ message: '更新简历失败: ' + error.message });
+      res.status(500).json({ message: '更新简历失败，请稍后重试' });
     }
   });
 
