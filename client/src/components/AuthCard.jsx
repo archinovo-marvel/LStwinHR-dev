@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Form, Input, Button, Checkbox, message, Spin } from 'antd';
-import { BuildingOutlined, UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyCertificateOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { BankOutlined, UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyCertificateOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { colors } from '../theme/colors';
@@ -693,7 +693,7 @@ const AuthCard = ({
   const renderCorpLoginForm = () => (
     <CorpCard>
       <CardHeader>
-        <CorpIcon><BuildingOutlined /></CorpIcon>
+        <CorpIcon><BankOutlined /></CorpIcon>
         <CardTitle>企业账号</CardTitle>
       </CardHeader>
 
@@ -746,7 +746,7 @@ const AuthCard = ({
   const renderCorpRegisterForm = () => (
     <CorpCard>
       <CardHeader>
-        <CorpIcon><BuildingOutlined /></CorpIcon>
+        <CorpIcon><BankOutlined /></CorpIcon>
         <CardTitle>企业账号注册</CardTitle>
       </CardHeader>
 
