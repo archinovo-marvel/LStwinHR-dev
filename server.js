@@ -4,6 +4,18 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+
+// 数据文件路径
+const DATA_FILE = path.join(__dirname, 'candidate-data.json');
+
+// 确保数据文件存在
+async function ensureDataFile() {
+  try {
+    await fs.access(DATA_FILE);
+  } catch (error) {
+    await fs.writeFile(DATA_FILE, JSON.stringify([]));
+  }
+}
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -16,7 +28,7 @@ try {
 } catch (error) {
   console.warn('⚠️ Jimp未成功加载，图片压缩功能将降级:', error.message);
 }
-const { pool, testConnection, dbConfig } = require('./db');
+const { pool, testConnection, dbConfig, initPersonalUserDB } = require('./db');
 const {
   generateCandidateId,
   ensureCandidateDatabase,
@@ -41,6 +53,7 @@ const {
   deleteInterviewSessionById,
   deleteTemporaryInterviewSessionsForUser
 } = require('./services/candidateStore');
+const { scheduleResumeAnalysis } = require('./server/services/resumeAnalysis');
 require('dotenv').config();
 const { 
   resumeAnalysisService, 
@@ -977,12 +990,6 @@ async function optimizeExistingResumeFiles() {
 
 // scheduleResumeAnalysis 已移至 server/services/resumeAnalysis.js
 
-// 简历路由工厂函数
-const { createResumeRouter } = require('./routes/resume.routes');
-
-// 挂载简历路由（传递依赖）
-app.use('/api', createResumeRouter({ ensureDataFile, scheduleResumeAnalysis }));
-
 // 验证码存储（生产环境应使用Redis）
 const verificationCodes = new Map();
 
@@ -1001,9 +1008,9 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// 创建并挂载模块化认证路由
-const { createAuthRouter } = require('./routes/authRoutes');
-const authRouter = createAuthRouter({
+// 挂载企业认证路由
+const createCorpAuthRouter = require('./server/routes/corpAuthRoutes');
+const corpAuthRouter = createCorpAuthRouter({
   pool,
   bcrypt,
   jwt,
@@ -1012,20 +1019,35 @@ const authRouter = createAuthRouter({
   emailTransporter,
   EMAIL_VERIFICATION_MODE: process.env.EMAIL_VERIFICATION_MODE,
   authMiddleware,
-  createPublicSubmissionToken: () => null,
   ensureCandidateDatabase,
   emailFromName: process.env.EMAIL_FROM_NAME,
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS
 });
-app.use('/api', authRouter);
+app.use('/api/corp', corpAuthRouter);
 
-// 挂载岗位路由
+// 挂载个人认证路由
+const createPersonalAuthRouter = require('./server/routes/personalAuthRoutes');
+const personalAuthRouter = createPersonalAuthRouter({
+  pool,
+  bcrypt,
+  jwt,
+  JWT_SECRET,
+  verificationCodes,
+  emailTransporter,
+  EMAIL_VERIFICATION_MODE: process.env.EMAIL_VERIFICATION_MODE,
+  authMiddleware,
+  initPersonalUserDB,
+  emailFromName: process.env.EMAIL_FROM_NAME,
+  emailFromAddress: process.env.EMAIL_FROM_ADDRESS
+});
+app.use('/api/personal', personalAuthRouter);
+
+// 岗位路由
 app.use('/api', require('./routes/position.routes'));
 
 // 挂载候选人路由
-const { scheduleResumeAnalysis } = require('./services/resumeAnalysis');
 const { createCandidateRouter } = require('./routes/candidateRoutes');
-const { createCandidateSubmission } = require('./utils/candidateSubmission');
+const { createCandidateSubmission } = require('./server/utils/candidateSubmission');
 
 const candidateRouter = createCandidateRouter({
   authMiddleware,
@@ -1059,7 +1081,7 @@ const candidateRouter = createCandidateRouter({
 
     const resumeScore = candidate.matchScore || 0;
     const mbtiScore = candidate.mbtiScore || 0;
-    const finalScore = Math.round((resumeScore * 0.35) + (mbtiScore * 0.15) + (interviewScore * 0.5));
+    const finalScore = Math.round((resumeScore * 0.4) + (mbtiScore * 0.1) + (interviewScore * 0.5));
     updateData.finalScore = finalScore;
 
     const updatedCandidate = await updateCandidateById(candidateId, updateData);
@@ -1087,6 +1109,10 @@ const candidateRouter = createCandidateRouter({
 });
 app.use('/api', candidateRouter);
 
+// 挂载简历路由
+const { createResumeRouter } = require('./routes/resume.routes');
+app.use('/api', createResumeRouter({ ensureDataFile, scheduleResumeAnalysis }));
+
 // 挂载聊天路由
 const { createChatRouter } = require('./routes/chat.routes');
 app.use('/api', createChatRouter());
@@ -1103,11 +1129,11 @@ app.use('/api', createInterviewSessionRouter({
   deleteTemporaryInterviewSessionsForUser
 }));
 
-// 挂载讯飞路由
-app.use('/api', require('./routes/xunfei.routes'));
+// 讯飞路由已移除
+// app.use('/api', require('./routes/xunfei.routes'));
 
 // AI面试评分端点
-const interviewAnalysisService = require('./services/interviewAnalysisService');
+const interviewAnalysisService = require('./server/services/interviewAnalysisService');
 
 app.post('/api/interview/analyze', authMiddleware, async (req, res) => {
   try {
@@ -1134,19 +1160,6 @@ setImmediate(() => {
 
 // 注意：express.json() 中间件会干扰multer的文件上传
 // 我们需要在特定路由中处理JSON解析
-
-// 数据文件路径
-const DATA_FILE = path.join(__dirname, 'candidate-data.json');
-
-// 确保数据文件存在
-async function ensureDataFile() {
-  try {
-    await fs.access(DATA_FILE);
-  } catch (error) {
-    // 文件不存在，创建空数组
-    await fs.writeFile(DATA_FILE, JSON.stringify([]));
-  }
-}
 
 // 简历下载端点已移至 routes/candidateRoutes.js
 // 聊天路由已移至 routes/chat.routes.js
