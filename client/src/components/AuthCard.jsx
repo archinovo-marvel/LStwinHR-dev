@@ -6,296 +6,199 @@ import styled from 'styled-components';
 import { colors } from '../theme/colors';
 
 // ============================================
-// STYLED COMPONENTS
+// WRAPPER
 // ============================================
-
-const FlipContainer = styled.div`
-  perspective: 1000px;
+const AuthWrapper = styled.div`
   width: 100%;
-  height: 480px;
-  position: relative;
+  max-width: 420px;
+  margin: 0 auto;
 `;
 
-const Flipper = styled.div`
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
-  transform-style: preserve-3d;
-
-  &.flipped {
-    transform: rotateY(180deg);
-  }
-`;
-
-const CardFace = styled.div`
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  border-radius: 16px;
+// ============================================
+// CARD
+// ============================================
+const AuthCard = styled.div`
   background: ${colors.surface};
-  box-shadow: 0 4px 24px ${colors.shadow};
+  border-radius: 16px;
+  border: 1px solid ${colors.border};
+  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
   overflow: hidden;
 `;
 
-const FrontCard = styled(CardFace)`
-  // front is default
-`;
-
-const BackCard = styled(CardFace)`
-  transform: rotateY(180deg);
-`;
-
-// Corp (Front) Card Styling - Blue
-const CorpCard = styled.div`
-  width: 100%;
-  height: 100%;
-  padding: 32px;
-  background: linear-gradient(135deg, ${colors.accentSub} 0%, ${colors.surface} 100%);
-  border-top: 3px solid ${colors.highlight};
+// ============================================
+// TAB BAR
+// ============================================
+const TabBar = styled.div`
   display: flex;
-  flex-direction: column;
-`;
-
-// Personal (Back) Card Styling - Green
-const PersonalCard = styled.div`
-  width: 100%;
-  height: 100%;
-  padding: 32px;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, ${colors.surface} 100%);
-  border-top: 3px solid ${colors.success};
-  display: flex;
-  flex-direction: column;
-`;
-
-// Card Header with Icon
-const CardHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-`;
-
-const CorpIcon = styled.div`
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: ${colors.highlight};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 24px;
-`;
-
-const PersonalIcon = styled.div`
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: ${colors.success};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 24px;
-`;
-
-const CardTitle = styled.div`
-  font-size: 18px;
-  font-weight: 600;
-  color: ${colors.text};
-`;
-
-// Tab Buttons Container
-const TabContainer = styled.div`
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
+  border-bottom: 1px solid ${colors.border};
   background: ${colors.frost};
-  padding: 4px;
-  border-radius: 10px;
 `;
 
-const TabButton = styled.button`
+const Tab = styled.button`
   flex: 1;
-  height: 40px;
+  height: 52px;
   border: none;
-  border-radius: 8px;
+  background: transparent;
   font-size: 14px;
   font-weight: 500;
+  color: ${props => props.$active ? colors.primary : colors.muted};
   cursor: pointer;
-  transition: all 0.25s ease;
-  background: transparent;
-  color: ${colors.textMuted};
+  position: relative;
+  transition: color 0.2s ease;
 
   &:hover {
     color: ${colors.text};
   }
 
-  &.active {
-    background: ${props => props.accentColor || colors.highlight};
-    color: white;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  }
+  ${props => props.$active && `
+    color: ${colors.primary};
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: ${colors.primary};
+      border-radius: 2px 2px 0 0;
+    }
+  `}
 `;
 
-// Form Styles
+// ============================================
+// CARD BODY
+// ============================================
+const CardBody = styled.div`
+  padding: 28px 32px 24px;
+`;
+
+// ============================================
+// ICON BADGE
+// ============================================
+const IconBadge = styled.div`
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: ${props => props.$variant === 'corp' ? colors.primary : colors.success}18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: ${props => props.$variant === 'corp' ? colors.primary : colors.success};
+  font-size: 20px;
+  margin-bottom: 20px;
+`;
+
+// ============================================
+// FORM
+// ============================================
 const StyledForm = styled(Form)`
-  flex: 1;
-  width: 100%;
-
   .ant-form-item {
-    margin-bottom: 14px;
-    width: 100%;
-  }
-
-  .ant-form-item-control-input {
-    min-height: 44px;
-  }
-
-  .ant-form-item-control-input-content {
-    width: 100%;
+    margin-bottom: 16px;
   }
 `;
 
 const StyledInput = styled(Input)`
-  width: 100%;
   height: 44px;
-  border-radius: 8px;
-  border: 1px solid ${colors.border};
-  padding: 0 14px;
+  border-radius: 10px;
+  border-color: ${colors.border};
   font-size: 14px;
-  transition: all 0.25s ease;
-  background: ${colors.cardBg};
 
   &:hover {
-    border-color: ${props => props.accentColor || colors.highlight};
+    border-color: #94A3BB;
   }
 
-  &:focus,
-  &.ant-input-focused {
-    border-color: ${props => props.accentColor || colors.highlight};
-    box-shadow: 0 0 0 3px ${props => props.accentColor ? `${props.accentColor}20` : 'rgba(37,99,235,0.12)'};
-  }
-
-  &::placeholder {
-    color: ${colors.textMuted};
+  &:focus, &.ant-input-focused {
+    border-color: ${colors.primary};
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
   }
 
   .ant-input-prefix {
-    color: ${colors.textMuted};
+    color: ${colors.muted};
     margin-right: 10px;
   }
 `;
 
-const StyledPasswordInput = styled(Input.Password)`
-  width: 100%;
+const StyledPassword = styled(Input.Password)`
   height: 44px;
-  border-radius: 8px;
-  border: 1px solid ${colors.border};
-  padding: 0 14px;
+  border-radius: 10px;
+  border-color: ${colors.border};
   font-size: 14px;
-  transition: all 0.25s ease;
-  background: ${colors.cardBg};
 
   &:hover {
-    border-color: ${props => props.accentColor || colors.highlight};
+    border-color: #94A3BB;
   }
 
-  &:focus,
-  &.ant-input-focused {
-    border-color: ${props => props.accentColor || colors.highlight};
-    box-shadow: 0 0 0 3px ${props => props.accentColor ? `${props.accentColor}20` : 'rgba(37,99,235,0.12)'};
-  }
-
-  &::placeholder {
-    color: ${colors.textMuted};
+  &:focus, &.ant-input-affix-wrapper-focused {
+    border-color: ${colors.primary};
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
   }
 
   .ant-input-prefix {
-    color: ${colors.textMuted};
+    color: ${colors.muted};
     margin-right: 10px;
-  }
-
-  .ant-input-suffix {
-    color: ${colors.textMuted};
   }
 `;
 
-const CodeInputWrapper = styled.div`
+const CodeRow = styled.div`
   display: flex;
-  width: 100%;
-  gap: 12px;
+  gap: 10px;
 `;
 
 const CodeInput = styled(Input)`
   flex: 1;
   height: 44px;
-  border-radius: 8px;
-  border: 1px solid ${colors.border};
-  padding: 0 14px;
+  border-radius: 10px;
+  border-color: ${colors.border};
   font-size: 14px;
-  transition: all 0.25s ease;
-
-  &:hover {
-    border-color: ${props => props.accentColor || colors.highlight};
-  }
 
   &:focus {
-    border-color: ${props => props.accentColor || colors.highlight};
-  }
-
-  &::placeholder {
-    color: ${colors.textMuted};
+    border-color: ${colors.primary};
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
   }
 
   .ant-input-prefix {
-    color: ${colors.textMuted};
+    color: ${colors.muted};
     margin-right: 10px;
   }
 `;
 
-const CodeButton = styled(Button)`
+const CodeBtn = styled(Button)`
   height: 44px;
-  border-radius: 8px;
-  min-width: 110px;
-  font-weight: 500;
+  border-radius: 10px;
+  min-width: 108px;
   font-size: 13px;
-  border: 1px solid ${props => props.accentColor || colors.border};
-  color: ${props => props.accentColor || colors.text};
-  background: transparent;
+  font-weight: 500;
+  border-color: ${colors.border};
+  color: ${colors.text};
 
-  &:hover {
-    background: ${props => props.accentColor ? `${props.accentColor}15` : colors.frost} !important;
-    border-color: ${props => props.accentColor || colors.primary} !important;
-    color: ${props => props.accentColor || colors.primary} !important;
+  &:hover:not(:disabled) {
+    border-color: ${colors.primary};
+    color: ${colors.primary};
+    background: ${colors.primaryLight};
   }
 
   &:disabled {
+    color: ${colors.muted};
     border-color: ${colors.border};
-    color: ${colors.textMuted};
-    background: transparent;
   }
 `;
 
-const PrimaryButton = styled(Button)`
+const SubmitBtn = styled(Button)`
   width: 100%;
-  height: 48px;
-  border-radius: 8px;
+  height: 46px;
+  border-radius: 10px;
+  font-size: 15px;
   font-weight: 500;
-  font-size: 14px;
-  letter-spacing: 0.05em;
-  background: ${props => props.accentColor || colors.primary};
-  border-color: ${props => props.accentColor || colors.primary};
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  margin-top: 8px;
+  background: ${colors.primary};
+  border-color: ${colors.primary};
+  box-shadow: 0 2px 8px rgba(37,99,235,0.2);
+  margin-top: 4px;
 
   &:hover {
-    background: ${props => props.accentColor || colors.highlight} !important;
-    border-color: ${props => props.accentColor || colors.highlight} !important;
+    background: ${colors.primaryDark} !important;
+    border-color: ${colors.primaryDark} !important;
     transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(37,99,235,0.25) !important;
   }
 
   &:active {
@@ -305,111 +208,81 @@ const PrimaryButton = styled(Button)`
   &:disabled {
     background: ${colors.border};
     border-color: ${colors.border};
+    box-shadow: none;
   }
 `;
 
-const DividerLine = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 16px 0;
-  width: 100%;
-
-  &::before,
-  &::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: ${colors.divider};
-  }
-
-  span {
-    padding: 0 16px;
-    font-size: 13px;
-    color: ${colors.textMuted};
-  }
-`;
-
-const FormFooter = styled.div`
-  text-align: center;
-  font-size: 14px;
-  color: ${colors.textMuted};
-  margin-top: auto;
-
-  a {
-    color: ${colors.text};
-    font-weight: 500;
-    margin-left: 4px;
-    position: relative;
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: -2px;
-      left: 0;
-      width: 100%;
-      height: 1px;
-      background: ${props => props.accentColor || colors.accent};
-      transform: scaleX(0);
-      transform-origin: right;
-      transition: transform 0.3s ease;
-    }
-
-    &:hover {
-      color: ${props => props.accentColor || colors.text};
-    }
-
-    &:hover::after {
-      transform: scaleX(1);
-      transform-origin: left;
-    }
-  }
-`;
-
-const FormSection = styled.div`
+// ============================================
+// SECTION
+// ============================================
+const FieldSection = styled.div`
   margin-bottom: 16px;
 `;
 
-const SectionTitle = styled.div`
-  font-size: 11px;
+const SectionLabel = styled.div`
+  font-size: 12px;
   font-weight: 500;
-  color: ${colors.textMuted};
-  letter-spacing: 0.1em;
+  color: ${colors.muted};
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 `;
 
-const ValidationStatus = styled.div`
+// ============================================
+// VALIDATION STATUS
+// ============================================
+const ValidationRow = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: -6px;
-  margin-bottom: 6px;
-  padding-left: 4px;
   font-size: 12px;
-  color: ${props => props.valid ? '#52c41a' : '#ff4d4f'};
+  margin-top: -10px;
+  margin-bottom: 6px;
+  padding-left: 2px;
+  color: ${props => props.$valid === true ? '#22c55e' : props.$valid === false ? '#ef4444' : colors.muted};
 `;
 
-const CheckingIndicator = styled.div`
+// ============================================
+// FOOTER
+// ============================================
+const CardFooter = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: -6px;
-  margin-bottom: 6px;
-  padding-left: 4px;
-  font-size: 12px;
-  color: ${colors.textMuted};
+  justify-content: center;
+  gap: 4px;
+  padding: 16px 32px 20px;
+  font-size: 14px;
+  color: ${colors.muted};
+  border-top: 1px solid ${colors.border};
+  background: ${colors.frost};
+
+  a {
+    color: ${colors.primary};
+    font-weight: 500;
+    text-decoration: none;
+    margin-left: 4px;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 `;
 
-const StatusIcon = styled.span`
-  display: inline-flex;
-  align-items: center;
+// ============================================
+// CHECKBOX
+// ============================================
+const StyledCheckbox = styled(Checkbox)`
+  font-size: 13px;
+  color: ${colors.muted};
+
+  a {
+    color: ${colors.primary};
+  }
 `;
 
 // ============================================
 // AUTH CARD COMPONENT
 // ============================================
-
 const AuthCard = ({
   mode = 'login',
   onCorpLogin,
@@ -422,13 +295,11 @@ const AuthCard = ({
   const [corpForm] = Form.useForm();
   const [personalForm] = Form.useForm();
 
-  // Register specific states
   const [corpCountdown, setCorpCountdown] = useState(0);
   const [personalCountdown, setPersonalCountdown] = useState(0);
   const [sendingCorpCode, setSendingCorpCode] = useState(false);
   const [sendingPersonalCode, setSendingPersonalCode] = useState(false);
 
-  // Corp register validation states
   const [checkingCorpUserId, setCheckingCorpUserId] = useState(false);
   const [corpUserIdStatus, setCorpUserIdStatus] = useState(null);
   const [checkingCorpEmail, setCheckingCorpEmail] = useState(false);
@@ -436,48 +307,34 @@ const AuthCard = ({
   const [checkingCorpPhone, setCheckingCorpPhone] = useState(false);
   const [corpPhoneStatus, setCorpPhoneStatus] = useState(null);
 
-  // Personal register validation states
   const [checkingPersonalUserId, setCheckingPersonalUserId] = useState(false);
   const [personalUserIdStatus, setPersonalUserIdStatus] = useState(null);
   const [checkingPersonalEmail, setCheckingPersonalEmail] = useState(false);
   const [personalEmailStatus, setPersonalEmailStatus] = useState(null);
 
-  // Refs for debounce timers
   const corpUserIdTimer = useRef(null);
   const corpEmailTimer = useRef(null);
   const corpPhoneTimer = useRef(null);
   const personalUserIdTimer = useRef(null);
   const personalEmailTimer = useRef(null);
 
-  // Check duplicate utility
   const checkDuplicate = async (field, value, setStatus, setChecking) => {
     if (!value || value.trim() === '') {
       setStatus(null);
       setChecking(false);
       return;
     }
-
     if (field === 'email') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(value)) {
-        setStatus(null);
-        setChecking(false);
-        return;
-      }
+      if (!emailRegex.test(value)) { setStatus(null); setChecking(false); return; }
     }
     if (field === 'phone') {
       const phoneRegex = /^1[3-9]\d{9}$/;
-      if (!phoneRegex.test(value)) {
-        setStatus(null);
-        setChecking(false);
-        return;
-      }
+      if (!phoneRegex.test(value)) { setStatus(null); setChecking(false); return; }
     }
-
     setChecking(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-
     try {
       const response = await fetch('/api/check-duplicate', {
         method: 'POST',
@@ -486,15 +343,8 @@ const AuthCard = ({
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        setStatus(null);
-        setChecking(false);
-        return;
-      }
-
+      if (!response.ok) { setStatus(null); setChecking(false); return; }
       const data = await response.json();
-
       if (data.success && data.exists) {
         setStatus({ valid: false, message: data.message });
       } else if (data.success) {
@@ -503,54 +353,38 @@ const AuthCard = ({
         setStatus(null);
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('检查重复失败:', error);
-      }
+      if (error.name !== 'AbortError') console.error('检查重复失败:', error);
       setStatus(null);
     }
     setChecking(false);
   };
 
   const debouncedCheck = (field, value, setStatus, setChecking, timerRef) => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
+    if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       checkDuplicate(field, value, setStatus, setChecking);
     }, 500);
   };
 
-  // Effects for countdowns
   useEffect(() => {
     let timer;
-    if (corpCountdown > 0) {
-      timer = setTimeout(() => setCorpCountdown(corpCountdown - 1), 1000);
-    }
+    if (corpCountdown > 0) timer = setTimeout(() => setCorpCountdown(corpCountdown - 1), 1000);
     return () => clearTimeout(timer);
   }, [corpCountdown]);
 
   useEffect(() => {
     let timer;
-    if (personalCountdown > 0) {
-      timer = setTimeout(() => setPersonalCountdown(personalCountdown - 1), 1000);
-    }
+    if (personalCountdown > 0) timer = setTimeout(() => setPersonalCountdown(personalCountdown - 1), 1000);
     return () => clearTimeout(timer);
   }, [personalCountdown]);
 
-  // Send verification code
   const handleSendCorpCode = async () => {
+    const email = corpForm.getFieldValue('email');
+    if (!email) { message.error('请先填写邮箱地址'); return; }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) { message.error('请填写正确的邮箱地址'); return; }
+    setSendingCorpCode(true);
     try {
-      const email = corpForm.getFieldValue('email');
-      if (!email) {
-        message.error('请先填写邮箱地址');
-        return;
-      }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        message.error('请填写正确的邮箱地址');
-        return;
-      }
-      setSendingCorpCode(true);
       const response = await fetch('/api/corp/send-verification-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -563,26 +397,17 @@ const AuthCard = ({
       } else {
         message.error(data.message || '发送验证码失败');
       }
-    } catch (error) {
-      message.error('网络错误');
-    } finally {
-      setSendingCorpCode(false);
-    }
+    } catch { message.error('网络错误'); }
+    finally { setSendingCorpCode(false); }
   };
 
   const handleSendPersonalCode = async () => {
+    const email = personalForm.getFieldValue('email');
+    if (!email) { message.error('请先填写邮箱地址'); return; }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) { message.error('请填写正确的邮箱地址'); return; }
+    setSendingPersonalCode(true);
     try {
-      const email = personalForm.getFieldValue('email');
-      if (!email) {
-        message.error('请先填写邮箱地址');
-        return;
-      }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        message.error('请填写正确的邮箱地址');
-        return;
-      }
-      setSendingPersonalCode(true);
       const response = await fetch('/api/personal/send-verification-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -595,639 +420,352 @@ const AuthCard = ({
       } else {
         message.error(data.message || '发送验证码失败');
       }
-    } catch (error) {
-      message.error('网络错误');
-    } finally {
-      setSendingPersonalCode(false);
-    }
+    } catch { message.error('网络错误'); }
+    finally { setSendingPersonalCode(false); }
   };
 
-  // Login handlers
   const handleCorpLogin = async ({ username, password }) => {
     try {
       await onCorpLogin({ email: username, password });
       message.success('企业账号登录成功');
-    } catch (e) {
-      message.error(e.message || '登录失败');
-    }
+    } catch (e) { message.error(e.message || '登录失败'); }
   };
 
   const handlePersonalLogin = async ({ username, password }) => {
     try {
       await onPersonalLogin({ email: username, password });
       message.success('个人账号登录成功');
-    } catch (e) {
-      message.error(e.message || '登录失败');
-    }
+    } catch (e) { message.error(e.message || '登录失败'); }
   };
 
-  // Register handlers
   const handleCorpRegister = async ({ userId, phone, email, verificationCode, password }) => {
-    // Validation check
-    if (corpUserIdStatus && !corpUserIdStatus.valid) {
-      message.error(corpUserIdStatus.message);
-      return;
-    }
-    if (corpEmailStatus && !corpEmailStatus.valid) {
-      message.error(corpEmailStatus.message);
-      return;
-    }
-    if (corpPhoneStatus && !corpPhoneStatus.valid) {
-      message.error(corpPhoneStatus.message);
-      return;
-    }
-    if (checkingCorpUserId || checkingCorpEmail || checkingCorpPhone) {
-      message.warning('正在检查信息，请稍候...');
-      return;
-    }
-
+    if (corpUserIdStatus && !corpUserIdStatus.valid) { message.error(corpUserIdStatus.message); return; }
+    if (corpEmailStatus && !corpEmailStatus.valid) { message.error(corpEmailStatus.message); return; }
+    if (corpPhoneStatus && !corpPhoneStatus.valid) { message.error(corpPhoneStatus.message); return; }
+    if (checkingCorpUserId || checkingCorpEmail || checkingCorpPhone) { message.warning('正在检查信息，请稍候...'); return; }
     try {
       await onCorpRegister({ userId, phone, email, verificationCode, password });
       message.success('注册成功，请登录');
       navigate('/login');
-    } catch (e) {
-      message.error(e.message || '注册失败');
-    }
+    } catch (e) { message.error(e.message || '注册失败'); }
   };
 
   const handlePersonalRegister = async ({ userId, email, verificationCode, password }) => {
-    // Validation check
-    if (personalUserIdStatus && !personalUserIdStatus.valid) {
-      message.error(personalUserIdStatus.message);
-      return;
-    }
-    if (personalEmailStatus && !personalEmailStatus.valid) {
-      message.error(personalEmailStatus.message);
-      return;
-    }
-    if (checkingPersonalUserId || checkingPersonalEmail) {
-      message.warning('正在检查信息，请稍候...');
-      return;
-    }
-
+    if (personalUserIdStatus && !personalUserIdStatus.valid) { message.error(personalUserIdStatus.message); return; }
+    if (personalEmailStatus && !personalEmailStatus.valid) { message.error(personalEmailStatus.message); return; }
+    if (checkingPersonalUserId || checkingPersonalEmail) { message.warning('正在检查信息，请稍候...'); return; }
     try {
       await onPersonalRegister({ userId, email, verificationCode, password });
       message.success('注册成功，请登录');
       navigate('/login');
-    } catch (e) {
-      message.error(e.message || '注册失败');
-    }
+    } catch (e) { message.error(e.message || '注册失败'); }
   };
 
-  // Tab click handlers
-  const handleCorpTabClick = () => {
-    setActiveTab('corp');
-    corpForm.resetFields();
-    setCorpCountdown(0);
-  };
-
-  const handlePersonalTabClick = () => {
-    setActiveTab('personal');
-    personalForm.resetFields();
-    setPersonalCountdown(0);
-  };
-
-  // ============================================
-  // CORP FORM (FRONT - BLUE)
-  // ============================================
-  const renderCorpLoginForm = () => (
-    <CorpCard>
-      <CardHeader>
-        <CorpIcon><BankOutlined /></CorpIcon>
-        <CardTitle>企业账号</CardTitle>
-      </CardHeader>
-
-      <StyledForm
-        form={corpForm}
-        onFinish={handleCorpLogin}
-        scrollToFirstError
-      >
-        <Form.Item
-          name="username"
-          rules={[{ required: true, message: '请输入用户名!' }]}
-        >
-          <StyledInput
-            prefix={<UserOutlined />}
-            placeholder="用户名 / 邮箱"
-            accentColor={colors.highlight}
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="password"
-          rules={[{ required: true, message: '请输入密码!' }]}
-        >
-          <StyledPasswordInput
-            prefix={<LockOutlined />}
-            placeholder="密码"
-            accentColor={colors.highlight}
-          />
-        </Form.Item>
-
-        <Form.Item style={{ marginBottom: 0 }}>
-          <PrimaryButton type="primary" htmlType="submit" accentColor={colors.highlight}>
-            登录
-          </PrimaryButton>
-        </Form.Item>
-      </StyledForm>
-
-      <DividerLine><span>或</span></DividerLine>
-
-      <FormFooter accentColor={colors.highlight}>
+  // ============ CORP LOGIN ============
+  const renderCorpLogin = () => (
+    <>
+      <CardBody>
+        <IconBadge $variant="corp"><BankOutlined /></IconBadge>
+        <StyledForm form={corpForm} onFinish={handleCorpLogin} scrollToFirstError>
+          <Form.Item name="username" rules={[{ required: true, message: '请输入用户名!' }]}>
+            <StyledInput prefix={<UserOutlined />} placeholder="用户名 / 邮箱" />
+          </Form.Item>
+          <Form.Item name="password" rules={[{ required: true, message: '请输入密码!' }]}>
+            <StyledPassword prefix={<LockOutlined />} placeholder="密码" />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <SubmitBtn type="primary" htmlType="submit">登录</SubmitBtn>
+          </Form.Item>
+        </StyledForm>
+      </CardBody>
+      <CardFooter>
         {mode === 'login' ? (
           <>还没有账号?<Link to="/register">立即注册</Link></>
         ) : (
           <>已有账号?<Link to="/login">立即登录</Link></>
         )}
-      </FormFooter>
-    </CorpCard>
+      </CardFooter>
+    </>
   );
 
-  const renderCorpRegisterForm = () => (
-    <CorpCard>
-      <CardHeader>
-        <CorpIcon><BankOutlined /></CorpIcon>
-        <CardTitle>企业账号注册</CardTitle>
-      </CardHeader>
-
-      <StyledForm
-        form={corpForm}
-        onFinish={handleCorpRegister}
-        scrollToFirstError
-      >
-        <FormSection>
-          <SectionTitle>基础信息</SectionTitle>
-
-          <Form.Item
-            name="userId"
-            rules={[{ required: true, message: '请输入用户ID!' }]}
-            validateTrigger="onBlur"
-          >
-            <StyledInput
-              prefix={<UserOutlined />}
-              placeholder="用户ID"
-              accentColor={colors.highlight}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value.trim()) {
-                  setCheckingCorpUserId(true);
-                  setCorpUserIdStatus(null);
-                  debouncedCheck('userId', value, setCorpUserIdStatus, setCheckingCorpUserId, corpUserIdTimer);
-                } else {
-                  setCheckingCorpUserId(false);
-                  setCorpUserIdStatus(null);
-                }
-              }}
-            />
-          </Form.Item>
-          {checkingCorpUserId && (
-            <CheckingIndicator><Spin size="small" /> 检查中...</CheckingIndicator>
-          )}
-          {corpUserIdStatus && !checkingCorpUserId && (
-            <ValidationStatus valid={corpUserIdStatus.valid}>
-              <StatusIcon>{corpUserIdStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}</StatusIcon>
-              {corpUserIdStatus.message}
-            </ValidationStatus>
-          )}
-
-          <Form.Item
-            name="phone"
-            rules={[
-              { required: true, message: '请输入手机号!' },
-              { pattern: /^1[3-9]\d{9}$/, message: '请输入有效11位手机号!' }
-            ]}
-            validateTrigger="onBlur"
-          >
-            <StyledInput
-              prefix={<PhoneOutlined />}
-              placeholder="手机号码"
-              accentColor={colors.highlight}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (/^1[3-9]\d{9}$/.test(value)) {
-                  setCheckingCorpPhone(true);
-                  setCorpPhoneStatus(null);
-                  debouncedCheck('phone', value, setCorpPhoneStatus, setCheckingCorpPhone, corpPhoneTimer);
-                } else {
-                  setCheckingCorpPhone(false);
-                  setCorpPhoneStatus(null);
-                }
-              }}
-            />
-          </Form.Item>
-          {checkingCorpPhone && (
-            <CheckingIndicator><Spin size="small" /> 检查中...</CheckingIndicator>
-          )}
-          {corpPhoneStatus && !checkingCorpPhone && (
-            <ValidationStatus valid={corpPhoneStatus.valid}>
-              <StatusIcon>{corpPhoneStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}</StatusIcon>
-              {corpPhoneStatus.message}
-            </ValidationStatus>
-          )}
-
-          <Form.Item
-            name="email"
-            rules={[
-              { required: true, message: '请输入邮箱!' },
-              { type: 'email', message: '请输入有效邮箱!' }
-            ]}
-            validateTrigger="onBlur"
-          >
-            <StyledInput
-              prefix={<MailOutlined />}
-              placeholder="邮箱地址"
-              accentColor={colors.highlight}
-              onChange={(e) => {
-                const value = e.target.value;
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (emailRegex.test(value)) {
-                  setCheckingCorpEmail(true);
-                  setCorpEmailStatus(null);
-                  debouncedCheck('email', value, setCorpEmailStatus, setCheckingCorpEmail, corpEmailTimer);
-                } else {
-                  setCheckingCorpEmail(false);
-                  setCorpEmailStatus(null);
-                }
-              }}
-            />
-          </Form.Item>
-          {checkingCorpEmail && (
-            <CheckingIndicator><Spin size="small" /> 检查中...</CheckingIndicator>
-          )}
-          {corpEmailStatus && !checkingCorpEmail && (
-            <ValidationStatus valid={corpEmailStatus.valid}>
-              <StatusIcon>{corpEmailStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}</StatusIcon>
-              {corpEmailStatus.message}
-            </ValidationStatus>
-          )}
-        </FormSection>
-
-        <FormSection>
-          <SectionTitle>验证信息</SectionTitle>
-          <Form.Item
-            name="verificationCode"
-            rules={[
-              { required: true, message: '请输入验证码!' },
-              { len: 6, message: '验证码为6位!' }
-            ]}
-          >
-            <CodeInputWrapper>
-              <CodeInput
-                prefix={<SafetyCertificateOutlined />}
-                placeholder="6位验证码"
-                maxLength={6}
-                accentColor={colors.highlight}
-              />
-              <CodeButton
-                onClick={handleSendCorpCode}
-                disabled={corpCountdown > 0 || sendingCorpCode}
-                loading={sendingCorpCode}
-                accentColor={colors.highlight}
-              >
-                {corpCountdown > 0 ? `${corpCountdown}s` : '获取验证码'}
-              </CodeButton>
-            </CodeInputWrapper>
-          </Form.Item>
-        </FormSection>
-
-        <FormSection>
-          <SectionTitle>安全信息</SectionTitle>
-          <Form.Item
-            name="password"
-            rules={[
-              { required: true, message: '请输入密码!' },
-              { min: 6, message: '密码至少6位!' }
-            ]}
-          >
-            <StyledPasswordInput
-              prefix={<LockOutlined />}
-              placeholder="密码"
-              accentColor={colors.highlight}
-            />
-          </Form.Item>
-          <Form.Item
-            name="confirm"
-            dependencies={['password']}
-            rules={[
-              { required: true, message: '请确认密码!' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('password') === value) {
-                    return Promise.resolve();
+  // ============ CORP REGISTER ============
+  const renderCorpRegister = () => (
+    <>
+      <CardBody>
+        <IconBadge $variant="corp"><BankOutlined /></IconBadge>
+        <StyledForm form={corpForm} onFinish={handleCorpRegister} scrollToFirstError>
+          <FieldSection>
+            <SectionLabel>基础信息</SectionLabel>
+            <Form.Item name="userId" rules={[{ required: true, message: '请输入用户ID!' }]} validateTrigger="onBlur">
+              <StyledInput
+                prefix={<UserOutlined />}
+                placeholder="用户ID"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.trim()) {
+                    setCheckingCorpUserId(true);
+                    setCorpUserIdStatus(null);
+                    debouncedCheck('userId', v, setCorpUserIdStatus, setCheckingCorpUserId, corpUserIdTimer);
+                  } else {
+                    setCheckingCorpUserId(false);
+                    setCorpUserIdStatus(null);
                   }
-                  return Promise.reject(new Error('两次密码不一致!'));
-                },
-              }),
-            ]}
-          >
-            <StyledPasswordInput
-              prefix={<LockOutlined />}
-              placeholder="确认密码"
-              accentColor={colors.highlight}
-            />
+                }}
+              />
+            </Form.Item>
+            {checkingCorpUserId && <ValidationRow><Spin size="small" />检查中...</ValidationRow>}
+            {corpUserIdStatus && !checkingCorpUserId && (
+              <ValidationRow $valid={corpUserIdStatus.valid}>
+                {corpUserIdStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+                {corpUserIdStatus.message}
+              </ValidationRow>
+            )}
+
+            <Form.Item name="phone" rules={[{ required: true, message: '请输入手机号!' }, { pattern: /^1[3-9]\d{9}$/, message: '请输入有效11位手机号!' }]} validateTrigger="onBlur">
+              <StyledInput
+                prefix={<PhoneOutlined />}
+                placeholder="手机号码"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^1[3-9]\d{9}$/.test(v)) {
+                    setCheckingCorpPhone(true);
+                    setCorpPhoneStatus(null);
+                    debouncedCheck('phone', v, setCorpPhoneStatus, setCheckingCorpPhone, corpPhoneTimer);
+                  } else {
+                    setCheckingCorpPhone(false);
+                    setCorpPhoneStatus(null);
+                  }
+                }}
+              />
+            </Form.Item>
+            {checkingCorpPhone && <ValidationRow><Spin size="small" />检查中...</ValidationRow>}
+            {corpPhoneStatus && !checkingCorpPhone && (
+              <ValidationRow $valid={corpPhoneStatus.valid}>
+                {corpPhoneStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+                {corpPhoneStatus.message}
+              </ValidationRow>
+            )}
+
+            <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱!' }, { type: 'email', message: '请输入有效邮箱!' }]} validateTrigger="onBlur">
+              <StyledInput
+                prefix={<MailOutlined />}
+                placeholder="邮箱地址"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  if (emailRegex.test(v)) {
+                    setCheckingCorpEmail(true);
+                    setCorpEmailStatus(null);
+                    debouncedCheck('email', v, setCorpEmailStatus, setCheckingCorpEmail, corpEmailTimer);
+                  } else {
+                    setCheckingCorpEmail(false);
+                    setCorpEmailStatus(null);
+                  }
+                }}
+              />
+            </Form.Item>
+            {checkingCorpEmail && <ValidationRow><Spin size="small" />检查中...</ValidationRow>}
+            {corpEmailStatus && !checkingCorpEmail && (
+              <ValidationRow $valid={corpEmailStatus.valid}>
+                {corpEmailStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+                {corpEmailStatus.message}
+              </ValidationRow>
+            )}
+          </FieldSection>
+
+          <FieldSection>
+            <SectionLabel>验证信息</SectionLabel>
+            <Form.Item name="verificationCode" rules={[{ required: true, message: '请输入验证码!' }, { len: 6, message: '验证码为6位!' }]}>
+              <CodeRow>
+                <CodeInput prefix={<SafetyCertificateOutlined />} placeholder="6位验证码" maxLength={6} />
+                <CodeBtn onClick={handleSendCorpCode} disabled={corpCountdown > 0 || sendingCorpCode} loading={sendingCorpCode}>
+                  {corpCountdown > 0 ? `${corpCountdown}s` : '获取验证码'}
+                </CodeBtn>
+              </CodeRow>
+            </Form.Item>
+          </FieldSection>
+
+          <FieldSection>
+            <SectionLabel>安全信息</SectionLabel>
+            <Form.Item name="password" rules={[{ required: true, message: '请输入密码!' }, { min: 6, message: '密码至少6位!' }]}>
+              <StyledPassword prefix={<LockOutlined />} placeholder="密码" />
+            </Form.Item>
+            <Form.Item
+              name="confirm"
+              dependencies={['password']}
+              rules={[{ required: true, message: '请确认密码!' }, ({ getFieldValue }) => ({ validator(_, value) {
+                if (!value || getFieldValue('password') === value) return Promise.resolve();
+                return Promise.reject(new Error('两次密码不一致!'));
+              }})]}
+            >
+              <StyledPassword prefix={<LockOutlined />} placeholder="确认密码" />
+            </Form.Item>
+          </FieldSection>
+
+          <Form.Item name="agreement" valuePropName="checked" style={{ marginBottom: 16 }}>
+            <StyledCheckbox>我已阅读并同意<a href="">服务协议</a></StyledCheckbox>
           </Form.Item>
-        </FormSection>
 
-        <Form.Item name="agreement" valuePropName="checked" style={{ marginBottom: 16 }}>
-          <Checkbox>我已阅读并同意 <a href="">服务协议</a></Checkbox>
-        </Form.Item>
-
-        <Form.Item style={{ marginBottom: 0 }}>
-          <PrimaryButton type="primary" htmlType="submit" accentColor={colors.highlight}>
-            注册
-          </PrimaryButton>
-        </Form.Item>
-      </StyledForm>
-
-      <DividerLine><span>或</span></DividerLine>
-
-      <FormFooter accentColor={colors.highlight}>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <SubmitBtn type="primary" htmlType="submit">注册</SubmitBtn>
+          </Form.Item>
+        </StyledForm>
+      </CardBody>
+      <CardFooter>
         已有账号?<Link to="/login">立即登录</Link>
-      </FormFooter>
-    </CorpCard>
+      </CardFooter>
+    </>
   );
 
-  // ============================================
-  // PERSONAL FORM (BACK - GREEN)
-  // ============================================
-  const renderPersonalLoginForm = () => (
-    <PersonalCard>
-      <CardHeader>
-        <PersonalIcon><UserOutlined /></PersonalIcon>
-        <CardTitle>个人账号</CardTitle>
-      </CardHeader>
-
-      <StyledForm
-        form={personalForm}
-        onFinish={handlePersonalLogin}
-        scrollToFirstError
-      >
-        <Form.Item
-          name="username"
-          rules={[{ required: true, message: '请输入用户名!' }]}
-        >
-          <StyledInput
-            prefix={<UserOutlined />}
-            placeholder="用户名 / 邮箱"
-            accentColor={colors.success}
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="password"
-          rules={[{ required: true, message: '请输入密码!' }]}
-        >
-          <StyledPasswordInput
-            prefix={<LockOutlined />}
-            placeholder="密码"
-            accentColor={colors.success}
-          />
-        </Form.Item>
-
-        <Form.Item style={{ marginBottom: 0 }}>
-          <PrimaryButton type="primary" htmlType="submit" accentColor={colors.success}>
-            登录
-          </PrimaryButton>
-        </Form.Item>
-      </StyledForm>
-
-      <DividerLine><span>或</span></DividerLine>
-
-      <FormFooter accentColor={colors.success}>
+  // ============ PERSONAL LOGIN ============
+  const renderPersonalLogin = () => (
+    <>
+      <CardBody>
+        <IconBadge $variant="personal"><UserOutlined /></IconBadge>
+        <StyledForm form={personalForm} onFinish={handlePersonalLogin} scrollToFirstError>
+          <Form.Item name="username" rules={[{ required: true, message: '请输入用户名!' }]}>
+            <StyledInput prefix={<UserOutlined />} placeholder="用户名 / 邮箱" />
+          </Form.Item>
+          <Form.Item name="password" rules={[{ required: true, message: '请输入密码!' }]}>
+            <StyledPassword prefix={<LockOutlined />} placeholder="密码" />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <SubmitBtn type="primary" htmlType="submit">登录</SubmitBtn>
+          </Form.Item>
+        </StyledForm>
+      </CardBody>
+      <CardFooter>
         {mode === 'login' ? (
           <>还没有账号?<Link to="/register">立即注册</Link></>
         ) : (
           <>已有账号?<Link to="/login">立即登录</Link></>
         )}
-      </FormFooter>
-    </PersonalCard>
+      </CardFooter>
+    </>
   );
 
-  const renderPersonalRegisterForm = () => (
-    <PersonalCard>
-      <CardHeader>
-        <PersonalIcon><UserOutlined /></PersonalIcon>
-        <CardTitle>个人账号注册</CardTitle>
-      </CardHeader>
-
-      <StyledForm
-        form={personalForm}
-        onFinish={handlePersonalRegister}
-        scrollToFirstError
-      >
-        <FormSection>
-          <SectionTitle>基础信息</SectionTitle>
-
-          <Form.Item
-            name="userId"
-            rules={[{ required: true, message: '请输入用户ID!' }]}
-            validateTrigger="onBlur"
-          >
-            <StyledInput
-              prefix={<UserOutlined />}
-              placeholder="用户ID"
-              accentColor={colors.success}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value.trim()) {
-                  setCheckingPersonalUserId(true);
-                  setPersonalUserIdStatus(null);
-                  debouncedCheck('userId', value, setPersonalUserIdStatus, setCheckingPersonalUserId, personalUserIdTimer);
-                } else {
-                  setCheckingPersonalUserId(false);
-                  setPersonalUserIdStatus(null);
-                }
-              }}
-            />
-          </Form.Item>
-          {checkingPersonalUserId && (
-            <CheckingIndicator><Spin size="small" /> 检查中...</CheckingIndicator>
-          )}
-          {personalUserIdStatus && !checkingPersonalUserId && (
-            <ValidationStatus valid={personalUserIdStatus.valid}>
-              <StatusIcon>{personalUserIdStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}</StatusIcon>
-              {personalUserIdStatus.message}
-            </ValidationStatus>
-          )}
-
-          <Form.Item
-            name="email"
-            rules={[
-              { required: true, message: '请输入邮箱!' },
-              { type: 'email', message: '请输入有效邮箱!' }
-            ]}
-            validateTrigger="onBlur"
-          >
-            <StyledInput
-              prefix={<MailOutlined />}
-              placeholder="邮箱地址"
-              accentColor={colors.success}
-              onChange={(e) => {
-                const value = e.target.value;
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (emailRegex.test(value)) {
-                  setCheckingPersonalEmail(true);
-                  setPersonalEmailStatus(null);
-                  debouncedCheck('email', value, setPersonalEmailStatus, setCheckingPersonalEmail, personalEmailTimer);
-                } else {
-                  setCheckingPersonalEmail(false);
-                  setPersonalEmailStatus(null);
-                }
-              }}
-            />
-          </Form.Item>
-          {checkingPersonalEmail && (
-            <CheckingIndicator><Spin size="small" /> 检查中...</CheckingIndicator>
-          )}
-          {personalEmailStatus && !checkingPersonalEmail && (
-            <ValidationStatus valid={personalEmailStatus.valid}>
-              <StatusIcon>{personalEmailStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}</StatusIcon>
-              {personalEmailStatus.message}
-            </ValidationStatus>
-          )}
-        </FormSection>
-
-        <FormSection>
-          <SectionTitle>验证信息</SectionTitle>
-          <Form.Item
-            name="verificationCode"
-            rules={[
-              { required: true, message: '请输入验证码!' },
-              { len: 6, message: '验证码为6位!' }
-            ]}
-          >
-            <CodeInputWrapper>
-              <CodeInput
-                prefix={<SafetyCertificateOutlined />}
-                placeholder="6位验证码"
-                maxLength={6}
-                accentColor={colors.success}
-              />
-              <CodeButton
-                onClick={handleSendPersonalCode}
-                disabled={personalCountdown > 0 || sendingPersonalCode}
-                loading={sendingPersonalCode}
-                accentColor={colors.success}
-              >
-                {personalCountdown > 0 ? `${personalCountdown}s` : '获取验证码'}
-              </CodeButton>
-            </CodeInputWrapper>
-          </Form.Item>
-        </FormSection>
-
-        <FormSection>
-          <SectionTitle>安全信息</SectionTitle>
-          <Form.Item
-            name="password"
-            rules={[
-              { required: true, message: '请输入密码!' },
-              { min: 6, message: '密码至少6位!' }
-            ]}
-          >
-            <StyledPasswordInput
-              prefix={<LockOutlined />}
-              placeholder="密码"
-              accentColor={colors.success}
-            />
-          </Form.Item>
-          <Form.Item
-            name="confirm"
-            dependencies={['password']}
-            rules={[
-              { required: true, message: '请确认密码!' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('password') === value) {
-                    return Promise.resolve();
+  // ============ PERSONAL REGISTER ============
+  const renderPersonalRegister = () => (
+    <>
+      <CardBody>
+        <IconBadge $variant="personal"><UserOutlined /></IconBadge>
+        <StyledForm form={personalForm} onFinish={handlePersonalRegister} scrollToFirstError>
+          <FieldSection>
+            <SectionLabel>基础信息</SectionLabel>
+            <Form.Item name="userId" rules={[{ required: true, message: '请输入用户ID!' }]} validateTrigger="onBlur">
+              <StyledInput
+                prefix={<UserOutlined />}
+                placeholder="用户ID"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.trim()) {
+                    setCheckingPersonalUserId(true);
+                    setPersonalUserIdStatus(null);
+                    debouncedCheck('userId', v, setPersonalUserIdStatus, setCheckingPersonalUserId, personalUserIdTimer);
+                  } else {
+                    setCheckingPersonalUserId(false);
+                    setPersonalUserIdStatus(null);
                   }
-                  return Promise.reject(new Error('两次密码不一致!'));
-                },
-              }),
-            ]}
-          >
-            <StyledPasswordInput
-              prefix={<LockOutlined />}
-              placeholder="确认密码"
-              accentColor={colors.success}
-            />
+                }}
+              />
+            </Form.Item>
+            {checkingPersonalUserId && <ValidationRow><Spin size="small" />检查中...</ValidationRow>}
+            {personalUserIdStatus && !checkingPersonalUserId && (
+              <ValidationRow $valid={personalUserIdStatus.valid}>
+                {personalUserIdStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+                {personalUserIdStatus.message}
+              </ValidationRow>
+            )}
+
+            <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱!' }, { type: 'email', message: '请输入有效邮箱!' }]} validateTrigger="onBlur">
+              <StyledInput
+                prefix={<MailOutlined />}
+                placeholder="邮箱地址"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  if (emailRegex.test(v)) {
+                    setCheckingPersonalEmail(true);
+                    setPersonalEmailStatus(null);
+                    debouncedCheck('email', v, setPersonalEmailStatus, setCheckingPersonalEmail, personalEmailTimer);
+                  } else {
+                    setCheckingPersonalEmail(false);
+                    setPersonalEmailStatus(null);
+                  }
+                }}
+              />
+            </Form.Item>
+            {checkingPersonalEmail && <ValidationRow><Spin size="small" />检查中...</ValidationRow>}
+            {personalEmailStatus && !checkingPersonalEmail && (
+              <ValidationRow $valid={personalEmailStatus.valid}>
+                {personalEmailStatus.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+                {personalEmailStatus.message}
+              </ValidationRow>
+            )}
+          </FieldSection>
+
+          <FieldSection>
+            <SectionLabel>验证信息</SectionLabel>
+            <Form.Item name="verificationCode" rules={[{ required: true, message: '请输入验证码!' }, { len: 6, message: '验证码为6位!' }]}>
+              <CodeRow>
+                <CodeInput prefix={<SafetyCertificateOutlined />} placeholder="6位验证码" maxLength={6} />
+                <CodeBtn onClick={handleSendPersonalCode} disabled={personalCountdown > 0 || sendingPersonalCode} loading={sendingPersonalCode}>
+                  {personalCountdown > 0 ? `${personalCountdown}s` : '获取验证码'}
+                </CodeBtn>
+              </CodeRow>
+            </Form.Item>
+          </FieldSection>
+
+          <FieldSection>
+            <SectionLabel>安全信息</SectionLabel>
+            <Form.Item name="password" rules={[{ required: true, message: '请输入密码!' }, { min: 6, message: '密码至少6位!' }]}>
+              <StyledPassword prefix={<LockOutlined />} placeholder="密码" />
+            </Form.Item>
+            <Form.Item
+              name="confirm"
+              dependencies={['password']}
+              rules={[{ required: true, message: '请确认密码!' }, ({ getFieldValue }) => ({ validator(_, value) {
+                if (!value || getFieldValue('password') === value) return Promise.resolve();
+                return Promise.reject(new Error('两次密码不一致!'));
+              }})]}
+            >
+              <StyledPassword prefix={<LockOutlined />} placeholder="确认密码" />
+            </Form.Item>
+          </FieldSection>
+
+          <Form.Item name="agreement" valuePropName="checked" style={{ marginBottom: 16 }}>
+            <StyledCheckbox>我已阅读并同意<a href="">服务协议</a></StyledCheckbox>
           </Form.Item>
-        </FormSection>
 
-        <Form.Item name="agreement" valuePropName="checked" style={{ marginBottom: 16 }}>
-          <Checkbox>我已阅读并同意 <a href="">服务协议</a></Checkbox>
-        </Form.Item>
-
-        <Form.Item style={{ marginBottom: 0 }}>
-          <PrimaryButton type="primary" htmlType="submit" accentColor={colors.success}>
-            注册
-          </PrimaryButton>
-        </Form.Item>
-      </StyledForm>
-
-      <DividerLine><span>或</span></DividerLine>
-
-      <FormFooter accentColor={colors.success}>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <SubmitBtn type="primary" htmlType="submit">注册</SubmitBtn>
+          </Form.Item>
+        </StyledForm>
+      </CardBody>
+      <CardFooter>
         已有账号?<Link to="/login">立即登录</Link>
-      </FormFooter>
-    </PersonalCard>
+      </CardFooter>
+    </>
   );
 
   return (
-    <FlipContainer>
-      <Flipper className={activeTab === 'personal' ? 'flipped' : ''}>
-        <FrontCard>
-          {/* Corp Tab Buttons */}
-          <TabContainer style={{ marginTop: 0 }}>
-            <TabButton
-              className={activeTab === 'corp' ? 'active' : ''}
-              onClick={handleCorpTabClick}
-              accentColor={colors.highlight}
-            >
-              企业账号
-            </TabButton>
-            <TabButton
-              className={activeTab === 'personal' ? 'active' : ''}
-              onClick={handlePersonalTabClick}
-              accentColor={colors.success}
-            >
-              个人账号
-            </TabButton>
-          </TabContainer>
+    <AuthWrapper>
+      <AuthCard>
+        <TabBar>
+          <Tab $active={activeTab === 'corp'} onClick={() => setActiveTab('corp')}>
+            企业账号
+          </Tab>
+          <Tab $active={activeTab === 'personal'} onClick={() => setActiveTab('personal')}>
+            个人账号
+          </Tab>
+        </TabBar>
 
-          {/* Corp Content */}
-          {activeTab === 'corp' && mode === 'login' && renderCorpLoginForm()}
-          {activeTab === 'corp' && mode === 'register' && renderCorpRegisterForm()}
-          {activeTab === 'personal' && mode === 'login' && renderPersonalLoginForm()}
-          {activeTab === 'personal' && mode === 'register' && renderPersonalRegisterForm()}
-        </FrontCard>
-
-        <BackCard>
-          {/* Same structure mirrored - Personal is the "back" */}
-          <TabContainer style={{ marginTop: 0 }}>
-            <TabButton
-              className={activeTab === 'corp' ? 'active' : ''}
-              onClick={handleCorpTabClick}
-              accentColor={colors.highlight}
-            >
-              企业账号
-            </TabButton>
-            <TabButton
-              className={activeTab === 'personal' ? 'active' : ''}
-              onClick={handlePersonalTabClick}
-              accentColor={colors.success}
-            >
-              个人账号
-            </TabButton>
-          </TabContainer>
-
-          {/* Same content, but this side shows Personal by default (rotated 180deg) */}
-          {activeTab === 'corp' && mode === 'login' && renderCorpLoginForm()}
-          {activeTab === 'corp' && mode === 'register' && renderCorpRegisterForm()}
-          {activeTab === 'personal' && mode === 'login' && renderPersonalLoginForm()}
-          {activeTab === 'personal' && mode === 'register' && renderPersonalRegisterForm()}
-        </BackCard>
-      </Flipper>
-    </FlipContainer>
+        {activeTab === 'corp' && mode === 'login' && renderCorpLogin()}
+        {activeTab === 'corp' && mode === 'register' && renderCorpRegister()}
+        {activeTab === 'personal' && mode === 'login' && renderPersonalLogin()}
+        {activeTab === 'personal' && mode === 'register' && renderPersonalRegister()}
+      </AuthCard>
+    </AuthWrapper>
   );
 };
 
