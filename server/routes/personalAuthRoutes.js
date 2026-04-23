@@ -204,6 +204,63 @@ function createPersonalAuthRouter({
     }
   });
 
+  // GET /api/personal/user/info
+  router.get('/user/info', authMiddleware, async (req, res) => {
+    try {
+      const [users] = await pool.query(
+        'SELECT id, username, email, memberLevel, role, createdAt, updatedAt FROM PersonalUser WHERE id = ?',
+        [req.user.id]
+      );
+      if (users.length === 0) {
+        return res.status(404).json({ message: '用户不存在' });
+      }
+      res.json({ success: true, user: users[0] });
+    } catch (error) {
+      console.error('获取个人用户信息错误:', error);
+      res.status(500).json({ message: '获取用户信息失败' });
+    }
+  });
+
+  // PUT /api/personal/user/info
+  router.put('/user/info', authMiddleware, async (req, res) => {
+    try {
+      const { username } = req.body;
+      await pool.query(
+        'UPDATE PersonalUser SET username = ?, updatedAt = NOW() WHERE id = ?',
+        [username, req.user.id]
+      );
+      const [users] = await pool.query(
+        'SELECT id, username, email, memberLevel, role, createdAt, updatedAt FROM PersonalUser WHERE id = ?',
+        [req.user.id]
+      );
+      res.json({ success: true, message: '用户信息更新成功', user: users[0] });
+    } catch (error) {
+      console.error('更新个人用户信息错误:', error);
+      res.status(500).json({ message: '更新用户信息失败' });
+    }
+  });
+
+  // PUT /api/personal/user/password
+  router.put('/user/password', authMiddleware, async (req, res) => {
+    try {
+      const { oldPassword, newPassword } = req.body;
+      const [users] = await pool.query('SELECT password FROM PersonalUser WHERE id = ?', [req.user.id]);
+      if (users.length === 0) {
+        return res.status(404).json({ message: '用户不存在' });
+      }
+      const isPasswordValid = await bcrypt.compare(oldPassword, users[0].password);
+      if (!isPasswordValid) {
+        return res.status(400).json({ message: '原密码错误' });
+      }
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await pool.query('UPDATE PersonalUser SET password = ?, updatedAt = NOW() WHERE id = ?', [hashedPassword, req.user.id]);
+      res.json({ success: true, message: '密码修改成功' });
+    } catch (error) {
+      console.error('修改密码错误:', error);
+      res.status(500).json({ message: '修改密码失败' });
+    }
+  });
+
   return router;
 }
 

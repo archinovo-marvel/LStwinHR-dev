@@ -21,10 +21,9 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import serverDataSync from '../utils/serverDataSync';
 import { getCandidateStats } from '../utils/candidateStats';
+import { colors } from '../theme/colors';
 
 const { Title, Text, Paragraph } = Typography;
-
-import { colors } from '../theme/colors';
 
 // 页面容器
 const PageContainer = styled.div`
@@ -610,7 +609,7 @@ const ModalHero = styled.div`
   padding: 22px 24px;
   margin-bottom: 22px;
   border-radius: 24px;
-  background: linear-gradient(145deg, rgba(139, 115, 85, 0.14), rgba(107, 91, 74, 0.08));
+  background: linear-gradient(145deg, rgba(37,99,235,0.12), rgba(37,99,235,0.06));
   border: 1px solid rgba(47, 128, 237, 0.12);
 `;
 
@@ -700,7 +699,9 @@ const ProfilePage = () => {
   useEffect(() => {
     fetchUserInfo();
     fetchUserStats();
-    fetchPositions();
+    if (user?.userType !== 'PERSONAL') {
+      fetchPositions();
+    }
   }, []);
   const [positions, setPositions] = useState([]);
   const [positionsLoading, setPositionsLoading] = useState(true);
@@ -714,7 +715,9 @@ const ProfilePage = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/user/info', {
+      const userType = user?.userType || 'CORP';
+      const endpoint = userType === 'PERSONAL' ? '/api/personal' : '/api/corp';
+      const response = await axios.get(`${endpoint}/user/info`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -765,19 +768,35 @@ const ProfilePage = () => {
   const fetchUserStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const candidatesRes = await axios.get('/api/candidates', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const candidates = Array.isArray(candidatesRes.data) ? candidatesRes.data : [];
+      const userType = user?.userType || 'CORP';
 
-      // 使用统一的统计计算函数
-      const statsResult = getCandidateStats(candidates);
+      if (userType === 'PERSONAL') {
+        // Personal users: get resume optimization count from personal_resumes
+        const resumeRes = await axios.get('/api/personal/resume/history', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const resumes = Array.isArray(resumeRes.data) ? resumeRes.data : [];
+        setStats({
+          resumeCount: resumes.length,
+          interviewCount: 0,
+          interviewDuration: 0
+        });
+      } else {
+        // Corp users: get candidate stats
+        const candidatesRes = await axios.get('/api/candidates', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const candidates = Array.isArray(candidatesRes.data) ? candidatesRes.data : [];
 
-      setStats({
-        resumeCount: statsResult.totalResumes,
-        interviewCount: statsResult.interviewCount,
-        interviewDuration: statsResult.interviewDuration
-      });
+        // 使用统一的统计计算函数
+        const statsResult = getCandidateStats(candidates);
+
+        setStats({
+          resumeCount: statsResult.totalResumes,
+          interviewCount: statsResult.interviewCount,
+          interviewDuration: statsResult.interviewDuration
+        });
+      }
     } catch (error) {
       console.error('获取统计数据失败:', error);
     }
@@ -901,11 +920,14 @@ const ProfilePage = () => {
     try {
       const values = await form.validateFields();
       const token = localStorage.getItem('token');
-      const response = await axios.put('/api/user/info', {
-        username: values.name,
-        phone: values.phone || null,
-        company: values.company || null
-      }, {
+      const userType = user?.userType || 'CORP';
+      const endpoint = userType === 'PERSONAL' ? '/api/personal' : '/api/corp';
+
+      const updateData = userType === 'PERSONAL'
+        ? { username: values.name }
+        : { username: values.name, phone: values.phone || null, company: values.company || null };
+
+      const response = await axios.put(`${endpoint}/user/info`, updateData, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -938,7 +960,9 @@ const ProfilePage = () => {
     try {
       const values = await passwordForm.validateFields();
       const token = localStorage.getItem('token');
-      const response = await axios.put('/api/user/password', {
+      const userType = user?.userType || 'CORP';
+      const endpoint = userType === 'PERSONAL' ? '/api/personal' : '/api/corp';
+      const response = await axios.put(`${endpoint}/user/password`, {
         oldPassword: values.oldPassword,
         newPassword: values.newPassword
       }, {
@@ -1092,13 +1116,15 @@ const ProfilePage = () => {
                   </div>
                   <div className="value">{userInfo.phone}</div>
                 </InfoItem>
-                <InfoItem>
-                  <div className="label">
-                    <BankOutlined />
-                    所属公司
-                  </div>
-                  <div className="value">{userInfo.company}</div>
-                </InfoItem>
+                {user?.userType !== 'PERSONAL' && (
+                  <InfoItem>
+                    <div className="label">
+                      <BankOutlined />
+                      所属公司
+                    </div>
+                    <div className="value">{userInfo.company}</div>
+                  </InfoItem>
+                )}
                 <InfoItem>
                   <div className="label">
                     <CrownOutlined />
@@ -1126,44 +1152,46 @@ const ProfilePage = () => {
                 </InfoItem>
               </InfoGrid>
             </InfoCard>
-            <InfoCard
-              title="岗位管理"
-              extra={(
-                <PositionToolbarButton type="primary" icon={<PlusOutlined />} onClick={() => openPositionModal()}>
-                  新增岗位
-                </PositionToolbarButton>
-              )}
-            >
-              {positionsLoading ? (
-                <Spin />
-              ) : positions.length === 0 ? (
-                <EmptyPositionsText>您还未设置任何招聘岗位</EmptyPositionsText>
-              ) : (
-                <PositionList>
-                  {positions.map(position => (
-                    <PositionItem key={position.id}>
-                      <div className="position-head">
-                        <div style={{ flex: 1 }}>
-                          <div className="position-name">{position.name}</div>
-                          {position.description ? <div className="position-desc">{position.description}</div> : null}
+            {user?.userType !== 'PERSONAL' && (
+              <InfoCard
+                title="岗位管理"
+                extra={(
+                  <PositionToolbarButton type="primary" icon={<PlusOutlined />} onClick={() => openPositionModal()}>
+                    新增岗位
+                  </PositionToolbarButton>
+                )}
+              >
+                {positionsLoading ? (
+                  <Spin />
+                ) : positions.length === 0 ? (
+                  <EmptyPositionsText>您还未设置任何招聘岗位</EmptyPositionsText>
+                ) : (
+                  <PositionList>
+                    {positions.map(position => (
+                      <PositionItem key={position.id}>
+                        <div className="position-head">
+                          <div style={{ flex: 1 }}>
+                            <div className="position-name">{position.name}</div>
+                            {position.description ? <div className="position-desc">{position.description}</div> : null}
+                          </div>
+                          <PositionActionGroup>
+                            <PositionEditButton size="small" icon={<EditOutlined />} onClick={() => openPositionModal(position)}>编辑</PositionEditButton>
+                            <PositionDeleteButton size="small" icon={<DeleteOutlined />} onClick={() => confirmDeletePosition(position)}>删除</PositionDeleteButton>
+                          </PositionActionGroup>
                         </div>
-                        <PositionActionGroup>
-                          <PositionEditButton size="small" icon={<EditOutlined />} onClick={() => openPositionModal(position)}>编辑</PositionEditButton>
-                          <PositionDeleteButton size="small" icon={<DeleteOutlined />} onClick={() => confirmDeletePosition(position)}>删除</PositionDeleteButton>
-                        </PositionActionGroup>
-                      </div>
-                      {(position.config?.coreSkills || []).length > 0 ? (
-                        <div className="position-meta">
-                          {(position.config.coreSkills || []).slice(0, 6).map((skill, index) => (
-                            <Tag key={`${position.id}-${index}-${skill}`} color="blue">{skill}</Tag>
-                          ))}
-                        </div>
-                      ) : null}
-                    </PositionItem>
-                  ))}
-                </PositionList>
-              )}
-            </InfoCard>
+                        {(position.config?.coreSkills || []).length > 0 ? (
+                          <div className="position-meta">
+                            {(position.config.coreSkills || []).slice(0, 6).map((skill, index) => (
+                              <Tag key={`${position.id}-${index}-${skill}`} color="blue">{skill}</Tag>
+                            ))}
+                          </div>
+                        ) : null}
+                      </PositionItem>
+                    ))}
+                  </PositionList>
+                )}
+              </InfoCard>
+            )}
           </RightContent>
         </MainLayout>
       </motion.div>
@@ -1189,9 +1217,11 @@ const ProfilePage = () => {
             <Form.Item name="phone" label="电话">
               <ModalInput prefix={<PhoneOutlined />} placeholder="请输入电话" />
             </Form.Item>
-            <Form.Item name="company" label="所属公司">
-              <ModalInput prefix={<BankOutlined />} placeholder="请输入所属公司" />
-            </Form.Item>
+            {user?.userType !== 'PERSONAL' && (
+              <Form.Item name="company" label="所属公司">
+                <ModalInput prefix={<BankOutlined />} placeholder="请输入所属公司" />
+              </Form.Item>
+            )}
           </ModalFormGrid>
         </Form>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
