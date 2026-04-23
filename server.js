@@ -1042,6 +1042,11 @@ const personalAuthRouter = createPersonalAuthRouter({
 });
 app.use('/api/personal', personalAuthRouter);
 
+// 挂载个人简历路由
+const createPersonalResumeRouter = require('./server/routes/personalResumeRoutes');
+const personalResumeRouter = createPersonalResumeRouter({ authMiddleware, upload });
+app.use('/api/personal', personalResumeRouter);
+
 // 岗位路由
 app.use('/api', require('./routes/position.routes'));
 
