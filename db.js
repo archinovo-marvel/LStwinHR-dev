@@ -23,8 +23,58 @@ const testConnection = async () => {
     return false;
   }
 };
+// 获取个人用户数据库连接池
+function getPersonalUserDB(userId) {
+  const dbName = `lstwin_personal_user_${userId}`;
+  const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 3306,
+    user: process.env.DB_USER || 'user',
+    password: process.env.DB_PASSWORD || 'password',
+    database: dbName,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+  });
+  return pool;
+}
+
+// 初始化个人用户数据库（注册时调用）
+async function initPersonalUserDB(userId) {
+  const dbName = `lstwin_personal_user_${userId}`;
+  const connection = await mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 3306,
+    user: process.env.DB_USER || 'user',
+    password: process.env.DB_PASSWORD || 'password',
+    multipleStatements: true
+  });
+
+  await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+  await connection.query(`USE \`${dbName}\``);
+
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS personal_resumes (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      owner_user_id BIGINT NOT NULL,
+      original_file_name VARCHAR(255),
+      original_file_blob LONGBLOB,
+      optimized_content LONGTEXT,
+      optimization_history LONGTEXT,
+      resume_score DECIMAL(10,2),
+      status VARCHAR(64) DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await connection.end();
+}
+
 module.exports = {
   pool,
   testConnection,
-  dbConfig
+  dbConfig,
+  getPersonalUserDB,
+  initPersonalUserDB
 };
