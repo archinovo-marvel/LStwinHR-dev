@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import './App.css';
@@ -17,6 +18,8 @@ import ResumeUpload from './pages/ResumeUpload';
 import CandidateForm from './pages/CandidateForm';
 import ResumeAnalysis from './pages/ResumeAnalysis';
 import ProfilePage from './pages/ProfilePage';
+import PersonalDashboardPage from './pages/PersonalDashboardPage';
+import PersonalResumePage from './pages/PersonalResumePage';
 
 // 布局组件
 import Layout from './components/Layout';
@@ -84,14 +87,84 @@ const checkWebRTCSupport = () => {
 // 初始化检查
 checkWebRTCSupport();
 
+// Ant Design Design Token Customization
+const antdTheme = {
+  token: {
+    colorPrimary: '#2563EB',
+    colorSuccess: '#22C55E',
+    colorWarning: '#F59E0B',
+    colorError: '#EF4444',
+    colorTextBase: '#0F172A',
+    colorBgBase: '#F8FAFC',
+    colorBorder: '#E2E8F0',
+    borderRadius: 10,
+    fontFamily: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontSize: 14,
+    boxShadow: '0 4px 16px rgba(37,99,235,0.15)',
+    boxShadowSecondary: '0 8px 32px rgba(15,23,42,0.08)',
+  },
+  components: {
+    Button: {
+      borderRadius: 10,
+      controlHeight: 40,
+      paddingInline: 20,
+    },
+    Input: {
+      borderRadius: 10,
+      controlHeight: 40,
+    },
+    Select: {
+      borderRadius: 10,
+      controlHeight: 40,
+    },
+    Card: {
+      borderRadius: 16,
+    },
+    Modal: {
+      borderRadius: 20,
+    },
+    Table: {
+      borderRadius: 12,
+    },
+  },
+};
+
 function App() {
   useEffect(() => {
     console.log('🚀 App 组件挂载，WebRTC 支持已初始化（未主动申请媒体权限）');
   }, []);
 
+  // ProtectedRoute: 验证用户登录状态和userType
+  function ProtectedRoute({ children, allowedTypes }) {
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+      const userType = user?.userType || 'CORP';
+      if (allowedTypes && !allowedTypes.includes(userType)) {
+        // Wrong user type → redirect to correct dashboard
+        if (userType === 'PERSONAL') {
+          navigate('/personal/dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      }
+    }, [user, navigate]);
+
+    if (!user) return null;
+    const userType = user?.userType || 'CORP';
+    if (allowedTypes && !allowedTypes.includes(userType)) return null;
+
+    return children;
+  }
+
   return (
     <StyledComponentsConfig>
-      <ConfigProvider locale={zhCN}>
+      <ConfigProvider locale={zhCN} theme={antdTheme}>
         <AuthProvider>
           <Router
             future={{
@@ -107,11 +180,37 @@ function App() {
                 <Layout>
                   <Routes>
                     <Route path="/" element={<HomePage />} />
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/chat" element={<ChatPage />} />
-                    <Route path="/resume" element={<ResumeUpload />} />
-                    <Route path="/resume-analysis" element={<ResumeAnalysis />} />
+                    <Route path="/dashboard" element={
+                      <ProtectedRoute allowedTypes={['CORP']}>
+                        <DashboardPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/chat" element={
+                      <ProtectedRoute allowedTypes={['CORP']}>
+                        <ChatPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/resume" element={
+                      <ProtectedRoute allowedTypes={['CORP']}>
+                        <ResumeUpload />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/resume-analysis" element={
+                      <ProtectedRoute allowedTypes={['CORP']}>
+                        <ResumeAnalysis />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/personal/dashboard" element={
+                      <ProtectedRoute allowedTypes={['PERSONAL']}>
+                        <PersonalDashboardPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/personal/resume" element={
+                      <ProtectedRoute allowedTypes={['PERSONAL']}>
+                        <PersonalResumePage />
+                      </ProtectedRoute>
+                    } />
                   </Routes>
                 </Layout>
               } />

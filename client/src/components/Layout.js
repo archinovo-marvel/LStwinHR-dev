@@ -181,7 +181,7 @@ const Layout = ({ children }) => {
     <StyledLayout>
       <Nav $scrolled={scrolled}>
         <NavLeft>
-          <Logo onClick={() => navigate(user ? '/dashboard' : '/')}>
+          <Logo onClick={() => navigate(user ? (user.userType === 'PERSONAL' ? '/personal/dashboard' : '/dashboard') : '/')}>
             <LogoImg src="/logo.png" alt="LStwin" />
             <LogoText $scrolled={scrolled}>招聘灵犀</LogoText>
           </Logo>
