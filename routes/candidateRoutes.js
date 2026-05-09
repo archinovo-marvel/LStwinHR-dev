@@ -81,7 +81,7 @@ function createCandidateRouter({
       }
 
       // 验证所有权
-      if (candidate.owner_user_id !== req.user.id) {
+      if (candidate.ownerUserId !== req.user.id) {
         return res.status(403).send('无权访问此简历');
       }
 

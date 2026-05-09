@@ -10,10 +10,13 @@ const DEFAULT_DB_PREFIX = process.env.CANDIDATE_DB_PREFIX || 'lstwin_candidates_
 const initPromises = new Map();
 // Per-user mutex for createInterviewSessionForUser to prevent concurrent session races
 const _sessionCreateMutex = new Map();
+// Per-user mutex for upsertPositionForUser to prevent TOCTOU on name uniqueness check
+const _positionUpsertMutex = new Map();
 
 // TTL cache for information_schema candidate table list
 let _candidateTableCache = null;
 let _candidateTableCacheTs = 0;
+let _candidateTableCachePending = null;
 const CANDIDATE_TABLE_CACHE_TTL_MS = 30 * 1000;
 
 async function getCandidateTableNames() {
@@ -21,12 +24,20 @@ async function getCandidateTableNames() {
   if (_candidateTableCache && now - _candidateTableCacheTs < CANDIDATE_TABLE_CACHE_TTL_MS) {
     return _candidateTableCache;
   }
-  const [tables] = await pool.query(
-    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'lstwin_candidates_user_%_candidates'"
-  );
-  _candidateTableCache = tables;
-  _candidateTableCacheTs = now;
-  return tables;
+  if (_candidateTableCachePending) {
+    return _candidateTableCachePending;
+  }
+  _candidateTableCachePending = (async () => {
+    const [tables] = await pool.query(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'lstwin_candidates_user_%_candidates'"
+    );
+    _candidateTableCache = tables;
+    _candidateTableCacheTs = Date.now();
+    return tables;
+  })().finally(() => {
+    _candidateTableCachePending = null;
+  });
+  return _candidateTableCachePending;
 }
 
 function invalidateCandidateTableCache() {
@@ -566,11 +577,11 @@ async function ensureCandidateDatabase(userId) {
 }
 
 function generateCandidateId() {
-  return Number(`${Date.now()}${crypto.randomInt(100, 999)}`);
+  return Number(`${Date.now()}${crypto.randomInt(1000, 9999)}`);
 }
 
 function generatePositionId() {
-  return Number(`${Date.now()}${crypto.randomInt(100, 999)}`);
+  return Number(`${Date.now()}${crypto.randomInt(1000, 9999)}`);
 }
 
 async function listCandidatesForUser(userId) {
@@ -799,6 +810,17 @@ async function updateCandidateById(candidateId, updateData) {
         values.push(encoded);
       }
 
+      // _computeInterviewScore: atomically computes finalScore in SQL to avoid
+      // read-modify-write races under concurrent interview-score and resume-analysis updates.
+      // Formula: finalScore = ROUND(match_score * 0.4 + mbti_score * 0.1 + interviewScore * 0.5)
+      if (updateData._computeInterviewScore !== undefined) {
+        setClauses.push(
+          'final_score = ROUND(COALESCE(match_score, 0) * 0.4 + COALESCE(mbti_score, 0) * 0.1 + ? * 0.5)'
+        );
+        values.push(Number(updateData._computeInterviewScore));
+        setClauses.push('has_interview = 1');
+      }
+
       for (const [key, value] of Object.entries(updateData)) {
         if (key === '_appendInterviewRecord') continue;
         if (fieldMapping[key]) {
@@ -854,14 +876,7 @@ async function listPositionsForUser(userId) {
   const [rows] = await pool.query(
     `SELECT ${POSITION_LIST_COLUMNS} FROM ${tableName} ORDER BY created_at ASC, id ASC`
   );
-  const positions = rows.map(mapRowToPosition);
-
-  if (isPureAutoSeedPositionSet(positions)) {
-    await pool.query(`DELETE FROM ${tableName}`);
-    return [];
-  }
-
-  return positions;
+  return rows.map(mapRowToPosition);
 }
 
 async function getPositionById(userId, positionId) {
@@ -899,6 +914,23 @@ async function getPositionByName(userId, name) {
 
 async function upsertPositionForUser(userId, payload) {
   const normalizedUserId = normalizeUserId(userId);
+
+  while (_positionUpsertMutex.has(normalizedUserId)) {
+    await _positionUpsertMutex.get(normalizedUserId);
+  }
+  let release;
+  const lock = new Promise(r => { release = r; });
+  _positionUpsertMutex.set(normalizedUserId, lock);
+
+  try {
+    return await _doUpsertPositionForUser(normalizedUserId, payload);
+  } finally {
+    _positionUpsertMutex.delete(normalizedUserId);
+    release();
+  }
+}
+
+async function _doUpsertPositionForUser(normalizedUserId, payload) {
   await ensureCandidateDatabase(normalizedUserId);
   const tableName = escapeIdentifier(getPositionTableName(normalizedUserId));
   const normalizedName = String(payload?.name || '').trim();

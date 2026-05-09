@@ -559,7 +559,8 @@ function collectResumeCandidateExtensions(candidate) {
 
 async function findCandidateResumeFile(candidate) {
   try {
-    if (!fsSync.existsSync(RESUME_UPLOAD_DIR)) {
+    const dirExists = await fs.access(RESUME_UPLOAD_DIR).then(() => true, () => false);
+    if (!dirExists) {
       return null;
     }
 
@@ -638,7 +639,8 @@ async function findCandidateResumeFile(candidate) {
 }
 
 async function ensureUniqueResumeTargetPath(targetPath) {
-  if (!fsSync.existsSync(targetPath)) {
+  const exists = await fs.access(targetPath).then(() => true, () => false);
+  if (!exists) {
     return targetPath;
   }
 
@@ -709,7 +711,8 @@ async function reconcileCandidateResumeFile(candidate, options = {}) {
 
   if (normalizeName && resolvedBaseName !== canonicalName) {
     try {
-      if (fsSync.existsSync(canonicalPath)) {
+      const canonicalExists = await fs.access(canonicalPath).then(() => true, () => false);
+      if (canonicalExists) {
         const sameFile = await areFilesEquivalent(resolvedPath, canonicalPath);
         if (sameFile) {
           await fs.unlink(resolvedPath);
@@ -955,7 +958,8 @@ async function optimizeResumeFileOnDisk(filePath) {
 
 async function optimizeExistingResumeFiles() {
   try {
-    if (!fsSync.existsSync(RESUME_UPLOAD_DIR)) return;
+    const dirExists = await fs.access(RESUME_UPLOAD_DIR).then(() => true, () => false);
+    if (!dirExists) return;
     const files = await fs.readdir(RESUME_UPLOAD_DIR);
     let optimizedCount = 0, skippedCount = 0;
     for (const fileName of files) {
@@ -1089,18 +1093,16 @@ const candidateRouter = createCandidateRouter({
       interviewScore,
       interviewDetails,
       interviewDate,
-      hasInterview: true
+      // _computeInterviewScore: atomically computes finalScore in SQL using
+      // ROUND(COALESCE(match_score,0)*0.4 + COALESCE(mbti_score,0)*0.1 + ?*0.5)
+      // This eliminates the read-modify-write race with concurrent resume analysis.
+      _computeInterviewScore: interviewScore
     };
 
     if (interviewRecord) {
       // Atomic append to avoid stale-read race condition under concurrent submissions
       updateData._appendInterviewRecord = interviewRecord;
     }
-
-    const resumeScore = candidate.matchScore || 0;
-    const mbtiScore = candidate.mbtiScore || 0;
-    const finalScore = Math.round((resumeScore * 0.4) + (mbtiScore * 0.1) + (interviewScore * 0.5));
-    updateData.finalScore = finalScore;
 
     const updatedCandidate = await updateCandidateById(candidateId, updateData);
     if (!updatedCandidate) {
@@ -1110,9 +1112,9 @@ const candidateRouter = createCandidateRouter({
     return {
       candidateId,
       interviewScore,
-      resumeScore,
-      mbtiScore,
-      finalScore,
+      resumeScore: candidate.matchScore || 0,
+      mbtiScore: candidate.mbtiScore || 0,
+      finalScore: updatedCandidate.finalScore,
       interviewRecordsCount: updatedCandidate.interviewRecords?.length || 0
     };
   },

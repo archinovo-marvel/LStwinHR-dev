@@ -8,6 +8,7 @@ try { Jimp = require('jimp'); } catch (e) {}
 
 const { resumeAnalysisService, reportService } = require('../../services/resume');
 const { getCandidateByIdGlobal, updateCandidateById } = require('../../services/candidateStore');
+const { withAIConcurrencyLimit } = require('../utils/aiConcurrencyGate');
 
 const RESUME_UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'resumes');
 const RESUME_ANALYSIS_TIMEOUT_MS = 240000;
@@ -128,6 +129,10 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
   if (trigger === 'manual') manualResumeAnalysisJobs.add(candidateId);
 
   const job = (async () => {
+    // Acquire concurrency slot before doing any work.
+    // Gate default: RESUME_ANALYSIS_MAX_CONCURRENCY=2, RESUME_ANALYSIS_MAX_QUEUE=10.
+    // Throws AIOverloadError when over capacity so callers can retry later.
+    await withAIConcurrencyLimit('resume-analysis', async () => {
     try {
       const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: true });
       if (!candidate) return;
@@ -208,6 +213,7 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
       if (trigger === 'manual') manualResumeAnalysisJobs.delete(candidateId);
       activeResumeAnalysisJobs.delete(candidateId);
     }
+      }); // close withAIConcurrencyLimit async callback
   })();
   activeResumeAnalysisJobs.set(candidateId, job);
   return job;
