@@ -22,6 +22,7 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { createDiskUpload } = require('./server/utils/uploadStorage');
 let Jimp;
 try {
   Jimp = require('jimp');
@@ -54,6 +55,7 @@ const {
   deleteTemporaryInterviewSessionsForUser
 } = require('./services/candidateStore');
 const { scheduleResumeAnalysis } = require('./server/services/resumeAnalysis');
+const { createVerificationCodeStore } = require('./server/services/verificationCodeStore');
 require('dotenv').config();
 const { 
   resumeAnalysisService, 
@@ -67,7 +69,6 @@ const {
 console.log('✅ 简历分析服务模块加载成功');
 const app = express();
 const PORT = 3001;
-const storage = multer.memoryStorage();
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'deepseek-r1:14b';
 const LOCAL_LLM_ENABLED = process.env.LOCAL_LLM_ENABLED === 'true';
@@ -118,40 +119,25 @@ const LOCAL_MODEL_REGISTRY = {
   }
 };
 
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
-  },
-  fileFilter: function (req, file, cb) {
-    console.log('=== multer fileFilter 被调用 ===');
-    console.log('multer fileFilter - 文件信息:', {
-      fieldname: file.fieldname,
-      originalname: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size
-    });
-    
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowedTypes.includes(ext)) {
-      console.log('文件类型验证通过:', ext);
-      cb(null, true);
-    } else {
-      console.log('文件类型验证失败:', ext);
-      cb(new Error('只支持PDF、Word、JPG格式文件'));
-    }
-  }
+const upload = createDiskUpload({
+  fileSize: 10 * 1024 * 1024,
+  allowedTypes: ['.pdf', '.doc', '.docx', '.jpg', '.jpeg'],
+  errorMessage: '只支持PDF、Word、JPG格式文件'
 });
 
 // 中间件
-app.use(cors());
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+app.use(cors({ origin: corsOrigin, credentials: false }));
 app.use('/uploads', express.static('uploads'));
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // JWT密钥
 const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 16) {
+  console.error('❌ JWT_SECRET 未配置或长度不足16位，服务器拒绝启动');
+  process.exit(1);
+}
 
 // 邮件配置
 const emailTransporter = nodemailer.createTransport({
@@ -165,7 +151,7 @@ const emailTransporter = nodemailer.createTransport({
   connectionTimeout: 10000,
   socketTimeout: 10000,
   tls: {
-    rejectUnauthorized: false
+    rejectUnauthorized: process.env.EMAIL_TLS_REJECT_UNAUTHORIZED !== 'false'
   }
 });
 
@@ -990,20 +976,26 @@ async function optimizeExistingResumeFiles() {
 
 // scheduleResumeAnalysis 已移至 server/services/resumeAnalysis.js
 
-// 验证码存储（生产环境应使用Redis）
-const verificationCodes = new Map();
+// 验证码存储（优先使用 Redis，多实例下可共享）
+const verificationCodes = createVerificationCodeStore();
 
 // 验证Token中间件（提取到此处供authRoutes使用）
 const authMiddleware = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
+  const authHeader = req.headers.authorization;
+  console.log('[Auth] Authorization header:', authHeader ? `${authHeader.substring(0, 20)}...` : 'missing');
+
+  const token = authHeader?.split(' ')[1];
   if (!token) {
+    console.log('[Auth] No token provided');
     return res.status(401).json({ message: '未提供认证令牌' });
   }
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('[Auth] Token decoded successfully, user:', decoded.id, 'type:', decoded.userType);
     req.user = decoded;
     next();
   } catch (error) {
+    console.log('[Auth] Token verification failed:', error.message);
     return res.status(401).json({ message: '无效的认证令牌' });
   }
 };
@@ -1042,10 +1034,33 @@ const personalAuthRouter = createPersonalAuthRouter({
 });
 app.use('/api/personal', personalAuthRouter);
 
+// 挂载通用认证路由（check-duplicate 等）
+const { createAuthRouter } = require('./routes/authRoutes');
+const authRouter = createAuthRouter({
+  pool,
+  bcrypt,
+  jwt,
+  JWT_SECRET,
+  verificationCodes,
+  emailTransporter,
+  EMAIL_VERIFICATION_MODE: process.env.EMAIL_VERIFICATION_MODE,
+  authMiddleware,
+  createPublicSubmissionToken: (user) => jwt.sign({ id: user.id, type: 'public_submission' }, JWT_SECRET, { expiresIn: '7d' }),
+  ensureCandidateDatabase,
+  emailFromName: process.env.EMAIL_FROM_NAME,
+  emailFromAddress: process.env.EMAIL_FROM_ADDRESS
+});
+app.use('/api', authRouter);
+
 // 挂载个人简历路由
 const createPersonalResumeRouter = require('./server/routes/personalResumeRoutes');
 const personalResumeRouter = createPersonalResumeRouter({ authMiddleware, upload });
-app.use('/api/personal', personalResumeRouter);
+app.use('/api/personal/resume', personalResumeRouter);
+
+// 挂载个人面试路由
+const createPersonalInterviewRouter = require('./routes/personalInterview.routes');
+const personalInterviewRouter = createPersonalInterviewRouter({ authMiddleware });
+app.use('/api/personal/interview', personalInterviewRouter);
 
 // 岗位路由
 app.use('/api', require('./routes/position.routes'));
@@ -1078,10 +1093,8 @@ const candidateRouter = createCandidateRouter({
     };
 
     if (interviewRecord) {
-      const existingRecords = candidate.interviewRecords || [];
-      const updatedRecords = [...existingRecords, interviewRecord];
-      updateData.interviewRecords = updatedRecords;
-      updateData.latestInterviewRecord = interviewRecord;
+      // Atomic append to avoid stale-read race condition under concurrent submissions
+      updateData._appendInterviewRecord = interviewRecord;
     }
 
     const resumeScore = candidate.matchScore || 0;
@@ -1100,7 +1113,7 @@ const candidateRouter = createCandidateRouter({
       resumeScore,
       mbtiScore,
       finalScore,
-      interviewRecordsCount: updateData.interviewRecords?.length || 0
+      interviewRecordsCount: updatedCandidate.interviewRecords?.length || 0
     };
   },
   listCandidatesForUser,
@@ -1114,13 +1127,22 @@ const candidateRouter = createCandidateRouter({
 });
 app.use('/api', candidateRouter);
 
+// 请求日志中间件
+app.use((req, res, next) => {
+  if (req.url.includes('resume-file')) {
+    console.log('[Server] 收到 resume-file 请求:', req.method, req.url);
+    console.log('[Server] Query:', req.query);
+  }
+  next();
+});
+
 // 挂载简历路由
 const { createResumeRouter } = require('./routes/resume.routes');
 app.use('/api', createResumeRouter({ ensureDataFile, scheduleResumeAnalysis }));
 
 // 挂载聊天路由
 const { createChatRouter } = require('./routes/chat.routes');
-app.use('/api', createChatRouter());
+app.use('/api', createChatRouter({ authMiddleware }));
 
 // 挂载面试会话路由
 const { createInterviewSessionRouter } = require('./routes/interviewSessionRoutes');
@@ -1146,38 +1168,28 @@ app.post('/api/interview/analyze', authMiddleware, async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error('AI评分失败:', e);
-    res.status(500).json({ error: e.message });
+    res.status(e.code === 'AI_OVERLOADED' ? 503 : 500).json({ error: e.message });
   }
 });
 
-// 测试数据库连接
-testConnection();
+// 测试数据库连接，失败则拒绝启动
+testConnection().then(ok => {
+  if (!ok) {
+    console.error('❌ 数据库连接失败，服务器拒绝启动，请检查数据库配置');
+    process.exit(1);
+  }
 
-// 验证邮件配置
-verifyEmailConfig();
+  // 验证邮件配置
+  verifyEmailConfig();
 
-// 启动后异步批量优化历史上传的简历文件
-setImmediate(() => {
-  optimizeExistingResumeFiles().catch(error => {
-    console.error('启动时历史简历压缩任务失败:', error);
+  // 启动后异步批量优化历史上传的简历文件
+  setImmediate(() => {
+    optimizeExistingResumeFiles().catch(error => {
+      console.error('启动时历史简历压缩任务失败:', error);
+    });
   });
-});
 
-// 注意：express.json() 中间件会干扰multer的文件上传
-// 我们需要在特定路由中处理JSON解析
-
-// 简历下载端点已移至 routes/candidateRoutes.js
-// 聊天路由已移至 routes/chat.routes.js
-// 面试分保存已移至 routes/candidateRoutes.js (saveCandidateInterviewResult factory)
-// 候选人创建已移至 routes/candidateRoutes.js (createCandidateSubmission factory)
-// 预览/清理无效候选人已移至 routes/candidateRoutes.js
-
-// 讯飞路由已移至 routes/xunfei.routes.js
-// 健康检查
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-app.listen(PORT, () => {
-  console.log(`数据服务器运行在 http://localhost:${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`数据服务器运行在 http://localhost:${PORT}`);
+  });
 });

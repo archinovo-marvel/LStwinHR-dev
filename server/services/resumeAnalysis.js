@@ -6,8 +6,8 @@ const fsSync = require('fs');
 let Jimp;
 try { Jimp = require('jimp'); } catch (e) {}
 
-const { resumeAnalysisService, reportService } = require('../services/resume');
-const db = require('../db');
+const { resumeAnalysisService, reportService } = require('../../services/resume');
+const { getCandidateByIdGlobal, updateCandidateById } = require('../../services/candidateStore');
 
 const RESUME_UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'resumes');
 const RESUME_ANALYSIS_TIMEOUT_MS = 240000;
@@ -15,6 +15,7 @@ const IMAGE_RESUME_ANALYSIS_TIMEOUT_MS = 180000;
 const LOCAL_VL_ANALYSIS_TIMEOUT_MS = 360000;
 const SCANNED_PDF_LOCAL_VL_ANALYSIS_TIMEOUT_MS = 600000;
 const DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS = 180000;
+const RESUME_ANALYSIS_USE_QUEUE = process.env.RESUME_ANALYSIS_USE_QUEUE !== 'false';
 
 const activeResumeAnalysisJobs = new Map();
 const manualResumeAnalysisJobs = new Set();
@@ -61,28 +62,39 @@ async function compressImageBufferIfNeeded(buffer, fileExt) {
 }
 
 async function analyzeResumeWithTimeout(fileBuffer, fileExt, position, timeoutMs = RESUME_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`简历分析超时(${timeoutMs}ms)`)), timeoutMs));
-  return Promise.race([resumeAnalysisService.analyze(fileBuffer, fileExt, position), timeoutPromise]);
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`简历分析超时(${timeoutMs}ms)`)), timeoutMs); });
+  return Promise.race([resumeAnalysisService.analyze(fileBuffer, fileExt, position), timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
 async function analyzeResumeWithLocalVLTimeout(fileBuffer, fileExt, position, options = {}, timeoutMs = LOCAL_VL_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`本地VL分析超时(${timeoutMs}ms)`)), timeoutMs));
-  return Promise.race([resumeAnalysisService.analyzeWithLocalVL(fileBuffer, fileExt, position, { ...options, timeoutMs }), timeoutPromise]);
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`本地VL分析超时(${timeoutMs}ms)`)), timeoutMs); });
+  return Promise.race([resumeAnalysisService.analyzeWithLocalVL(fileBuffer, fileExt, position, { ...options, timeoutMs }), timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
 async function analyzeResumeWithDeepSeekTimeout(fileBuffer, fileExt, position, options = {}, timeoutMs = DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`DeepSeek分析超时(${timeoutMs}ms)`)), timeoutMs));
-  return Promise.race([resumeAnalysisService.analyzeWithDeepSeek(fileBuffer, fileExt, position, options), timeoutPromise]);
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`DeepSeek分析超时(${timeoutMs}ms)`)), timeoutMs); });
+  return Promise.race([resumeAnalysisService.analyzeWithDeepSeek(fileBuffer, fileExt, position, options), timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
 async function analyzeResumeTextWithDeepSeekTimeout(text, position, options = {}, timeoutMs = DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS) {
-  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`DeepSeek文本分析超时(${timeoutMs}ms)`)), timeoutMs));
-  return Promise.race([resumeAnalysisService.analyzeText(text, position, options), timeoutPromise]);
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`DeepSeek文本分析超时(${timeoutMs}ms)`)), timeoutMs); });
+  return Promise.race([resumeAnalysisService.analyzeText(text, position, options), timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
 
 function calculateCandidateScores(candidate, resumeAnalysis) {
   let finalMatchScore = 0, mbtiScore = 0, resumeScore = 0;
-  if (candidate?.mbti) {
-    const mbtiScores = { 'ENTJ': 90, 'INTJ': 88, 'ENTP': 85, 'INTP': 82, 'ENFJ': 85, 'INFJ': 88, 'ENFP': 80, 'INFP': 78, 'ESTJ': 88, 'ISTJ': 85, 'ESTP': 82, 'ISTP': 80, 'ESFJ': 85, 'ISFJ': 82, 'ESFP': 78, 'ISFP': 75 };
-    mbtiScore = mbtiScores[candidate.mbti] || 75;
+
+  // 优先使用 AI 生成的 MBTI 岗位匹配度评分
+  if (resumeAnalysis?.mbtiMatchScore !== null && resumeAnalysis?.mbtiMatchScore !== undefined) {
+    mbtiScore = resumeAnalysis.mbtiMatchScore;
+    console.log(`[MBTI评分] 使用AI生成的MBTI岗位匹配度评分: ${mbtiScore}, 理由: ${resumeAnalysis.mbtiMatchReason || '无'}`);
+  } else if (candidate?.mbti) {
+    // 如果 AI 没有生成 MBTI 评分，使用默认值 75（不再使用预设映射表）
+    mbtiScore = 75;
+    console.log(`[MBTI评分] AI未生成MBTI评分，使用默认值: ${mbtiScore}`);
   }
+
   const isSuccess = resumeAnalysis?.parseStatus === 'SUCCESS' || resumeAnalysis?.parseStatus === 'PARTIAL_SUCCESS';
   if (resumeAnalysis && isSuccess) {
     const scores = resumeAnalysis.scores || {};
@@ -117,10 +129,10 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
 
   const job = (async () => {
     try {
-      const candidate = await db.getCandidateByIdGlobal(candidateId, { includeBlob: true });
+      const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: true });
       if (!candidate) return;
       if (!candidate.resumeFilePath && !candidate.resumeFileBuffer) {
-        await db.updateCandidateById(candidateId, { status: '待分析', recommendation: '未找到简历文件，无法分析' });
+        await updateCandidateById(candidateId, { status: '待分析', recommendation: '未找到简历文件，无法分析' });
         return;
       }
       let fileBuffer, fileExt;
@@ -129,7 +141,7 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
         fileExt = candidate.resumeFileName ? path.extname(candidate.resumeFileName).toLowerCase() : '.pdf';
       } else {
         try { await fs.access(candidate.resumeFilePath); } catch {
-          await db.updateCandidateById(candidateId, { status: '待分析', recommendation: '简历文件已丢失，无法分析' });
+          await updateCandidateById(candidateId, { status: '待分析', recommendation: '简历文件已丢失，无法分析' });
           return;
         }
         fileBuffer = await fs.promises.readFile(candidate.resumeFilePath);
@@ -139,7 +151,7 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
       const timeoutMs = Math.max(getResumeAnalysisTimeoutMs(fileExt), localVlTimeoutMs);
       const deepseekTimeoutMs = getDeepSeekFallbackTimeoutMs(fileExt, options);
       let resumeAnalysis, usedLocalVL = false, localVLTimedOut = false, cachedExtractedText = '', cachedExtractedMeta = null;
-      const updateAnalysisStage = async (status, recommendation) => { await db.updateCandidateById(candidateId, { status, recommendation: recommendation || status }); };
+      const updateAnalysisStage = async (status, recommendation) => { await updateCandidateById(candidateId, { status, recommendation: recommendation || status }); };
       const updateCachedExtractedText = async (text, meta = {}) => {
         const normalizedText = String(text || '').trim();
         if (normalizedText && normalizedText.length >= String(cachedExtractedText || '').trim().length) {
@@ -147,10 +159,12 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
         }
       };
       const localVLEnabled = process.env.LOCAL_LLM_ENABLED === 'true';
+      // 构建 candidateProfile 包含 MBTI 类型
+      const candidateProfile = { mbti: candidate.mbti, name: candidate.name, position: candidate.position };
       if (localVLEnabled) {
         await updateAnalysisStage('VL分析准备中', '正在准备本地VL分析任务');
         try {
-          resumeAnalysis = await analyzeResumeWithLocalVLTimeout(fileBuffer, fileExt, candidate.position, { originalName: candidate.resumeFileName, onProgress: updateAnalysisStage, onExtractedText: updateCachedExtractedText }, localVlTimeoutMs);
+          resumeAnalysis = await analyzeResumeWithLocalVLTimeout(fileBuffer, fileExt, candidate.position, { originalName: candidate.resumeFileName, mbti: candidate.mbti, onProgress: updateAnalysisStage, onExtractedText: updateCachedExtractedText }, localVlTimeoutMs);
           if (resumeAnalysis.parseStatus === 'SUCCESS' || resumeAnalysis.parseStatus === 'PARTIAL_SUCCESS') usedLocalVL = true;
           else throw new Error(resumeAnalysis.error || 'VL分析失败');
         } catch (vlError) {
@@ -158,8 +172,8 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
           await updateAnalysisStage('DeepSeek分析中', cachedExtractedText ? '本地VL未完成，正在复用OCR文本切换到DeepSeek分析' : '本地VL OCR未成功，正在切换到DeepSeek备用分析');
           try {
             resumeAnalysis = cachedExtractedText
-              ? await analyzeResumeTextWithDeepSeekTimeout(cachedExtractedText, candidate.position, { originalName: candidate.resumeFileName, parserStatus: cachedExtractedMeta?.parserStatus || '', parserError: cachedExtractedMeta?.parserError || '', parserMetadata: cachedExtractedMeta?.parserMetadata || {}, fileType: fileExt }, deepseekTimeoutMs)
-              : await analyzeResumeWithDeepSeekTimeout(fileBuffer, fileExt, candidate.position, { originalName: candidate.resumeFileName }, deepseekTimeoutMs);
+              ? await analyzeResumeTextWithDeepSeekTimeout(cachedExtractedText, candidate.position, { originalName: candidate.resumeFileName, mbti: candidate.mbti, parserStatus: cachedExtractedMeta?.parserStatus || '', parserError: cachedExtractedMeta?.parserError || '', parserMetadata: cachedExtractedMeta?.parserMetadata || {}, fileType: fileExt, candidateProfile }, deepseekTimeoutMs)
+              : await analyzeResumeWithDeepSeekTimeout(fileBuffer, fileExt, candidate.position, { originalName: candidate.resumeFileName, mbti: candidate.mbti, candidateProfile }, deepseekTimeoutMs);
           } catch (dsError) {
             resumeAnalysis = createFallbackResumeAnalysis(`简历分析失败，本地VL和DeepSeek都无法完成分析`, '请检查简历文件格式或联系管理员');
           }
@@ -167,7 +181,7 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
       } else {
         await updateAnalysisStage('DeepSeek分析中', '本地VL未启用，正在使用DeepSeek分析');
         try {
-          resumeAnalysis = await analyzeResumeWithDeepSeekTimeout(fileBuffer, fileExt, candidate.position, { originalName: candidate.resumeFileName }, deepseekTimeoutMs);
+          resumeAnalysis = await analyzeResumeWithDeepSeekTimeout(fileBuffer, fileExt, candidate.position, { originalName: candidate.resumeFileName, mbti: candidate.mbti, candidateProfile }, deepseekTimeoutMs);
         } catch (dsError) {
           resumeAnalysis = createFallbackResumeAnalysis(`简历分析失败: ${dsError.message}`, '请检查简历文件格式或联系管理员');
         }
@@ -179,7 +193,7 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
       if (resumeAnalysis.parseStatus === 'SUCCESS' || resumeAnalysis.parseStatus === 'PARTIAL_SUCCESS') status = usedLocalVL ? '已分析(VL)' : '已分析';
       else if (localVLTimedOut || String(resumeAnalysis.summary || '').includes('超时')) status = 'VL分析超时';
       const resumeAnalysisResult = reportService.buildResumeAnalysisResult({ analysis: resumeAnalysis, position: candidate.position, positionConfig: null, mbtiScore, interviewScore: candidate.interviewScore || null });
-      await db.updateCandidateById(candidateId, { resumeAnalysis, resumeAnalysisResult, matchScore: finalMatchScore, mbtiScore, resumeScore, status, recommendation });
+      await updateCandidateById(candidateId, { resumeAnalysis, resumeAnalysisResult, matchScore: finalMatchScore, mbtiScore, resumeScore, status, recommendation });
       if (renameAfterAnalysis && resumeAnalysis.parseStatus === 'SUCCESS') {
         // Note: renameResumeFileIfNeeded and reconcileCandidateResumeFile remain in server.js
         // They are only called here when renameAfterAnalysis is true
@@ -188,7 +202,7 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
       console.error(`后台简历分析任务异常(candidateId=${candidateId}):`, error);
       try {
         const isTimeout = error.code === 'LOCAL_VL_ANALYSIS_TIMEOUT' || error.code === 'RESUME_ANALYSIS_TIMEOUT' || String(error.message || '').includes('超时') || String(error.message || '').toLowerCase().includes('timeout');
-        await db.updateCandidateById(candidateId, { status: isTimeout ? 'VL分析超时' : '待分析', recommendation: isTimeout ? `简历分析超时，请稍后重试` : '简历分析失败，请稍后重试' });
+        await updateCandidateById(candidateId, { status: isTimeout ? 'VL分析超时' : '待分析', recommendation: isTimeout ? `简历分析超时，请稍后重试` : '简历分析失败，请稍后重试' });
       } catch {}
     } finally {
       if (trigger === 'manual') manualResumeAnalysisJobs.delete(candidateId);
@@ -199,8 +213,26 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
   return job;
 }
 
-function scheduleResumeAnalysis(candidateId, options = {}) {
-  setImmediate(() => { runResumeAnalysisInBackground(candidateId, options).catch(error => { console.error(`后台简历分析调度失败(candidateId=${candidateId}):`, error); }); });
+async function dispatchResumeAnalysis(candidateId, options = {}) {
+  if (!RESUME_ANALYSIS_USE_QUEUE) {
+    return runResumeAnalysisInBackground(candidateId, options);
+  }
+
+  try {
+    const { enqueueResumeAnalysis } = require('../queues/resumeAnalysisQueue');
+    return await enqueueResumeAnalysis(candidateId, options);
+  } catch (error) {
+    console.error(`简历分析入队失败，回退到进程内执行(candidateId=${candidateId}):`, error.message);
+    return runResumeAnalysisInBackground(candidateId, options);
+  }
 }
 
-module.exports = { scheduleResumeAnalysis, runResumeAnalysisInBackground };
+function scheduleResumeAnalysis(candidateId, options = {}) {
+  setImmediate(() => {
+    dispatchResumeAnalysis(candidateId, options).catch(error => {
+      console.error(`后台简历分析调度失败(candidateId=${candidateId}):`, error);
+    });
+  });
+}
+
+module.exports = { scheduleResumeAnalysis, runResumeAnalysisInBackground, dispatchResumeAnalysis };

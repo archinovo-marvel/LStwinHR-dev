@@ -1,4 +1,20 @@
 const express = require('express');
+const crypto = require('crypto');
+
+// In-memory login rate limiter: max 10 attempts per 15 minutes per IP
+const _loginAttempts = new Map();
+function checkLoginRateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 10;
+  let entry = _loginAttempts.get(ip);
+  if (!entry || now - entry.windowStart > windowMs) {
+    entry = { count: 0, windowStart: now };
+    _loginAttempts.set(ip, entry);
+  }
+  entry.count++;
+  return entry.count <= maxAttempts;
+}
 
 function createCorpAuthRouter({
   pool,
@@ -23,8 +39,13 @@ function createCorpAuthRouter({
         return res.status(400).json({ message: '用户名和密码不能为空' });
       }
 
+      const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+      if (!checkLoginRateLimit(ip)) {
+        return res.status(429).json({ message: '登录尝试次数过多，请15分钟后重试' });
+      }
+
       const [users] = await pool.query(
-        'SELECT * FROM User WHERE email = ? OR username = ?',
+        'SELECT id, username, email, phone, password, role, memberLevel, userType, company, systemCode FROM User WHERE email = ? OR username = ?',
         [username, username]
       );
 
@@ -37,6 +58,8 @@ function createCorpAuthRouter({
       if (!isPasswordValid) {
         return res.status(401).json({ message: '用户名或密码错误' });
       }
+
+      _loginAttempts.delete(ip);
 
       await ensureCandidateDatabase(user.id);
 
@@ -74,50 +97,53 @@ function createCorpAuthRouter({
         return res.status(400).json({ message: '请填写完整的注册信息' });
       }
 
-      const storedCode = verificationCodes.get(email);
+      const storedCode = await verificationCodes.get(email);
       if (!storedCode || storedCode.code !== verificationCode) {
         return res.status(400).json({ message: '验证码错误或已过期' });
       }
       if (Date.now() > storedCode.expiry) {
-        verificationCodes.delete(email);
+        await verificationCodes.delete(email);
         return res.status(400).json({ message: '验证码已过期' });
       }
 
-      // 检查用户名是否已存在
-      const [existingUsername] = await pool.query(
-        'SELECT * FROM User WHERE username = ?',
-        [userId]
+      // 早期快速检查（优化用途，不是唯一性保障）
+      const [existing] = await pool.query(
+        'SELECT username, email, phone FROM User WHERE username = ? OR email = ? OR phone = ?',
+        [userId, email, phone]
       );
-      if (existingUsername.length > 0) {
-        return res.status(400).json({ message: '用户名已被注册', field: 'userId' });
-      }
-      // 检查邮箱是否已存在
-      const [existingEmail] = await pool.query(
-        'SELECT * FROM User WHERE email = ?',
-        [email]
-      );
-      if (existingEmail.length > 0) {
-        return res.status(400).json({ message: '该邮箱已被注册', field: 'email' });
-      }
-      // 检查手机号是否已存在
-      const [existingPhone] = await pool.query(
-        'SELECT * FROM User WHERE phone = ?',
-        [phone]
-      );
-      if (existingPhone.length > 0) {
+      if (existing.length > 0) {
+        const m = existing[0];
+        if (m.username === userId) return res.status(400).json({ message: '用户名已被注册', field: 'userId' });
+        if (m.email === email) return res.status(400).json({ message: '该邮箱已被注册', field: 'email' });
         return res.status(400).json({ message: '该手机号已被注册', field: 'phone' });
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
       const now = new Date();
-      const [result] = await pool.query(
-        'INSERT INTO User (username, email, phone, password, role, systemCode, userType, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, email, phone, hashedPassword, 'USER', 'zplx', 'CORP', now, now]
-      );
+      let result;
+      try {
+        [result] = await pool.query(
+          'INSERT INTO User (username, email, phone, password, role, systemCode, userType, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [userId, email, phone, hashedPassword, 'USER', 'zplx', 'CORP', now, now]
+        );
+      } catch (insertErr) {
+        if (insertErr.errno === 1062) {
+          const msg = insertErr.message || '';
+          if (msg.includes('uk_user_username') || msg.includes('username')) return res.status(400).json({ message: '用户名已被注册', field: 'userId' });
+          if (msg.includes('uk_user_email') || msg.includes('email')) return res.status(400).json({ message: '该邮箱已被注册', field: 'email' });
+          return res.status(400).json({ message: '该信息已被注册' });
+        }
+        throw insertErr;
+      }
 
-      await ensureCandidateDatabase(result.insertId);
+      try {
+        await ensureCandidateDatabase(result.insertId);
+      } catch (initErr) {
+        await pool.query('DELETE FROM User WHERE id = ?', [result.insertId]).catch(() => {});
+        throw initErr;
+      }
 
-      verificationCodes.delete(email);
+      await verificationCodes.delete(email);
       res.json({
         success: true,
         message: '注册成功',
@@ -147,7 +173,7 @@ function createCorpAuthRouter({
         return res.status(400).json({ message: '请提供有效的邮箱地址' });
       }
 
-      const storedCode = verificationCodes.get(email);
+      const storedCode = await verificationCodes.get(email);
       if (storedCode && Date.now() < storedCode.expiry - 4 * 60 * 1000) {
         const waitTime = Math.ceil((storedCode.expiry - 4 * 60 * 1000 - Date.now()) / 1000);
         return res.status(429).json({
@@ -156,9 +182,9 @@ function createCorpAuthRouter({
         });
       }
 
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = crypto.randomInt(100000, 1000000).toString();
       const expiry = Date.now() + 5 * 60 * 1000;
-      verificationCodes.set(email, { code, expiry });
+      await verificationCodes.set(email, { code, expiry });
 
       const mailOptions = {
         from: `"${emailFromName}" <${emailFromAddress}>`,
@@ -192,11 +218,9 @@ function createCorpAuthRouter({
         return res.status(503).json({ message: '邮件服务未配置，请联系管理员' });
       }
 
-      const sendEmailWithTimeout = Promise.race([
-        emailTransporter.sendMail(mailOptions),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('邮件发送超时')), 15000))
-      ]);
-      await sendEmailWithTimeout;
+      let emailTimeoutId;
+      const emailTimeoutPromise = new Promise((_, reject) => { emailTimeoutId = setTimeout(() => reject(new Error('邮件发送超时')), 15000); });
+      await Promise.race([emailTransporter.sendMail(mailOptions), emailTimeoutPromise]).finally(() => clearTimeout(emailTimeoutId));
 
       res.json({
         success: true,

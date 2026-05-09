@@ -61,7 +61,7 @@ function createCandidateRouter({
   });
 
   // 简历下载端点
-  router.get('/download-resume/:id', async (req, res) => {
+  router.get('/download-resume/:id', authMiddleware, async (req, res) => {
     try {
       console.log('收到下载请求:', req.params.id);
       const candidateId = parseInt(req.params.id);
@@ -78,6 +78,11 @@ function createCandidateRouter({
 
       if (!candidate) {
         return res.status(404).send('候选人不存在');
+      }
+
+      // 验证所有权
+      if (candidate.owner_user_id !== req.user.id) {
+        return res.status(403).send('无权访问此简历');
       }
 
       // 确定文件扩展名
@@ -250,7 +255,7 @@ function createCandidateRouter({
 
   // Cleanup endpoints (legacy JSON file management)
   if (getInvalidCandidates && ensureDataFile) {
-    router.get('/candidates/cleanup-invalid-preview', async (req, res) => {
+    router.get('/candidates/cleanup-invalid-preview', authMiddleware, async (req, res) => {
       try {
         await ensureDataFile();
         const data = await fs.readFile(DATA_FILE, 'utf8');
@@ -263,7 +268,7 @@ function createCandidateRouter({
       }
     });
 
-    router.delete('/candidates/cleanup-invalid', async (req, res) => {
+    router.delete('/candidates/cleanup-invalid', authMiddleware, async (req, res) => {
       try {
         await ensureDataFile();
         const data = await fs.readFile(DATA_FILE, 'utf8');

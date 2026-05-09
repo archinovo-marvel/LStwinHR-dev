@@ -8,6 +8,30 @@ const {
 
 const DEFAULT_DB_PREFIX = process.env.CANDIDATE_DB_PREFIX || 'lstwin_candidates_user_';
 const initPromises = new Map();
+// Per-user mutex for createInterviewSessionForUser to prevent concurrent session races
+const _sessionCreateMutex = new Map();
+
+// TTL cache for information_schema candidate table list
+let _candidateTableCache = null;
+let _candidateTableCacheTs = 0;
+const CANDIDATE_TABLE_CACHE_TTL_MS = 30 * 1000;
+
+async function getCandidateTableNames() {
+  const now = Date.now();
+  if (_candidateTableCache && now - _candidateTableCacheTs < CANDIDATE_TABLE_CACHE_TTL_MS) {
+    return _candidateTableCache;
+  }
+  const [tables] = await pool.query(
+    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'lstwin_candidates_user_%_candidates'"
+  );
+  _candidateTableCache = tables;
+  _candidateTableCacheTs = now;
+  return tables;
+}
+
+function invalidateCandidateTableCache() {
+  _candidateTableCache = null;
+}
 
 const LIST_COLUMNS = [
   'id',
@@ -394,23 +418,50 @@ function mapInterviewSessionToRow(session) {
     candidateName: session.candidateName || '',
     position: session.position || '',
     status: session.status || 'in_progress',
-    conversation: serializeJsonValue(session.conversation || {
-      questions: [],
-      candidateAnswers: [],
-      aiReplies: [],
-      timestamps: []
-    }),
-    scoring: serializeJsonValue(session.scoring),
-    metadata: serializeJsonValue(session.metadata || {
-      totalQuestions: 0,
-      totalAnswers: 0,
-      averageAnswerLength: 0,
-      sessionDuration: 0
-    }),
+    conversation: session.conversation === undefined
+      ? undefined
+      : serializeJsonValue(session.conversation || {
+          questions: [],
+          candidateAnswers: [],
+          aiReplies: [],
+          timestamps: []
+        }),
+    scoring: session.scoring === undefined ? undefined : serializeJsonValue(session.scoring),
+    metadata: session.metadata === undefined
+      ? undefined
+      : serializeJsonValue(session.metadata || {
+          totalQuestions: 0,
+          totalAnswers: 0,
+          averageAnswerLength: 0,
+          sessionDuration: 0
+        }),
     startTime: toDate(session.startTime) || now,
     endTime: toDate(session.endTime),
     createdAt: toDate(session.createdAt) || now,
     updatedAt: toDate(session.updatedAt) || now
+  };
+}
+
+function mergeInterviewSessionForUpsert(current, incoming, normalizedUserId) {
+  const existingSession = current || {};
+  const nextSession = incoming || {};
+
+  return {
+    ...existingSession,
+    ...nextSession,
+    id: Number(nextSession.id || existingSession.id),
+    ownerUserId: normalizedUserId,
+    candidateId: nextSession.candidateId === undefined ? existingSession.candidateId : nextSession.candidateId,
+    candidateName: nextSession.candidateName === undefined ? existingSession.candidateName : nextSession.candidateName,
+    position: nextSession.position === undefined ? existingSession.position : nextSession.position,
+    status: nextSession.status === undefined ? existingSession.status : nextSession.status,
+    conversation: nextSession.conversation === undefined ? existingSession.conversation : nextSession.conversation,
+    scoring: nextSession.scoring === undefined ? existingSession.scoring : nextSession.scoring,
+    metadata: nextSession.metadata === undefined ? existingSession.metadata : nextSession.metadata,
+    startTime: nextSession.startTime === undefined ? existingSession.startTime : nextSession.startTime,
+    endTime: nextSession.endTime === undefined ? existingSession.endTime : nextSession.endTime,
+    createdAt: existingSession.createdAt || nextSession.createdAt,
+    updatedAt: nextSession.updatedAt || new Date().toISOString()
   };
 }
 
@@ -493,6 +544,7 @@ async function ensureCandidateDatabase(userId) {
       const positionTableName = getPositionTableName(normalizedUserId);
 
       await pool.query(buildCreateCandidateTableSql(candidateTableName));
+      invalidateCandidateTableCache();
       await pool.query(buildCreateInterviewSessionTableSql(interviewSessionTableName));
       await pool.query(buildCreatePositionTableSql(positionTableName));
       await ensureTableColumn(candidateTableName, 'position_description', 'TEXT NULL AFTER position');
@@ -668,9 +720,7 @@ async function upsertCandidateForUser(userId, candidate) {
 }
 
 async function getCandidateByIdGlobal(candidateId, options = {}) {
-  const [tables] = await pool.query(
-    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'lstwin_candidates_user_%_candidates'"
-  );
+  const tables = await getCandidateTableNames();
   
   for (const { TABLE_NAME } of tables) {
     const tableName = escapeIdentifier(TABLE_NAME);
@@ -697,9 +747,7 @@ async function getCandidateByIdGlobal(candidateId, options = {}) {
 }
 
 async function updateCandidateById(candidateId, updateData) {
-  const [tables] = await pool.query(
-    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'lstwin_candidates_user_%_candidates'"
-  );
+  const tables = await getCandidateTableNames();
   
   for (const { TABLE_NAME } of tables) {
     const tableName = escapeIdentifier(TABLE_NAME);
@@ -715,7 +763,7 @@ async function updateCandidateById(candidateId, updateData) {
       
       const setClauses = [];
       const values = [];
-      
+
       const fieldMapping = {
         status: 'status',
         recommendation: 'recommendation',
@@ -737,10 +785,22 @@ async function updateCandidateById(candidateId, updateData) {
         interviewRecords: 'interview_records',
         latestInterviewRecord: 'latest_interview_record'
       };
-      
+
       const jsonFields = ['interviewDetails', 'interviewRecords', 'latestInterviewRecord', 'resumeAnalysisResult', 'resumeAnalysis'];
-      
+
+      // _appendInterviewRecord: atomically appends one record to interview_records JSON array
+      if (updateData._appendInterviewRecord !== undefined) {
+        const encoded = JSON.stringify(updateData._appendInterviewRecord);
+        setClauses.push(
+          `interview_records = IF(interview_records IS NULL OR JSON_TYPE(interview_records) != 'ARRAY', JSON_ARRAY(?), JSON_ARRAY_APPEND(interview_records, '$', CAST(? AS JSON)))`
+        );
+        values.push(encoded, encoded);
+        setClauses.push('latest_interview_record = ?');
+        values.push(encoded);
+      }
+
       for (const [key, value] of Object.entries(updateData)) {
+        if (key === '_appendInterviewRecord') continue;
         if (fieldMapping[key]) {
           setClauses.push(`${fieldMapping[key]} = ?`);
           if (jsonFields.includes(key) && value !== null && value !== undefined) {
@@ -942,22 +1002,40 @@ async function getInterviewSessionById(userId, sessionId) {
 
 async function createInterviewSessionForUser(userId, session) {
   const normalizedUserId = normalizeUserId(userId);
-  const activeSession = await getCurrentInterviewSessionForUser(normalizedUserId);
-  if (activeSession && Number(activeSession.id) !== Number(session.id)) {
-    activeSession.status = 'cancelled';
-    activeSession.endTime = new Date().toISOString();
-    activeSession.updatedAt = new Date().toISOString();
-    await upsertInterviewSessionForUser(normalizedUserId, activeSession);
-  }
 
-  return upsertInterviewSessionForUser(normalizedUserId, session);
+  // Serialize concurrent calls for the same user to prevent two sessions going in_progress
+  while (_sessionCreateMutex.has(normalizedUserId)) {
+    await _sessionCreateMutex.get(normalizedUserId);
+  }
+  let release;
+  const lock = new Promise(r => { release = r; });
+  _sessionCreateMutex.set(normalizedUserId, lock);
+
+  try {
+    const activeSession = await getCurrentInterviewSessionForUser(normalizedUserId);
+    if (activeSession && Number(activeSession.id) !== Number(session.id)) {
+      activeSession.status = 'cancelled';
+      activeSession.endTime = new Date().toISOString();
+      activeSession.updatedAt = new Date().toISOString();
+      await upsertInterviewSessionForUser(normalizedUserId, activeSession);
+    }
+
+    return upsertInterviewSessionForUser(normalizedUserId, session);
+  } finally {
+    _sessionCreateMutex.delete(normalizedUserId);
+    release();
+  }
 }
 
 async function upsertInterviewSessionForUser(userId, session) {
   const normalizedUserId = normalizeUserId(userId);
   await ensureCandidateDatabase(normalizedUserId);
   const tableName = escapeIdentifier(getInterviewSessionTableName(normalizedUserId));
-  const row = mapInterviewSessionToRow(session);
+  const currentSession = Number.isFinite(Number(session?.id))
+    ? await getInterviewSessionById(normalizedUserId, session.id)
+    : null;
+  const mergedSession = mergeInterviewSessionForUpsert(currentSession, session, normalizedUserId);
+  const row = mapInterviewSessionToRow(mergedSession);
 
   await pool.query(
     `INSERT INTO ${tableName} (

@@ -1,6 +1,5 @@
 const express = require('express');
 const path = require('path');
-const multer = require('multer');
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://ollama:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'deepseek-r1:14b';
@@ -11,13 +10,10 @@ const LOCAL_LLM_VL_URL = process.env.LOCAL_LLM_VL_URL || 'http://host.docker.int
 const DOCKER_CONTROL_ENABLED = process.env.DOCKER_CONTROL_ENABLED === 'true';
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { withAIConcurrencyLimit } = require('../server/utils/aiConcurrencyGate');
 const execFileAsync = promisify(execFile);
-
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }
-});
+const CHAT_MAX_IMAGE_COUNT = Number(process.env.CHAT_MAX_IMAGE_COUNT || 3);
+const CHAT_MAX_IMAGE_TOTAL_BYTES = Number(process.env.CHAT_MAX_IMAGE_TOTAL_BYTES || 4 * 1024 * 1024);
 
 const LOCAL_MODEL_REGISTRY = {
   'qwen3-vl-8b-gguf': {
@@ -50,6 +46,40 @@ function resolveLocalModelConfig(preferredLocalModel = '') {
   return Object.values(LOCAL_MODEL_REGISTRY)[0];
 }
 
+function estimateDataUrlBytes(dataUrl) {
+  const separatorIndex = dataUrl.indexOf(',');
+  if (separatorIndex === -1) {
+    return 0;
+  }
+
+  const base64Body = dataUrl.slice(separatorIndex + 1);
+  const paddingLength = (base64Body.match(/=+$/) || [''])[0].length;
+  return Math.max(0, Math.ceil(base64Body.length * 3 / 4) - paddingLength);
+}
+
+function normalizeChatImages(images = []) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+
+  return images.filter(image => image && typeof image === 'string' && image.startsWith('data:image/'));
+}
+
+function validateChatImages(images = []) {
+  const normalizedImages = normalizeChatImages(images);
+
+  if (normalizedImages.length > CHAT_MAX_IMAGE_COUNT) {
+    throw new Error(`图片数量不能超过 ${CHAT_MAX_IMAGE_COUNT} 张`);
+  }
+
+  const totalBytes = normalizedImages.reduce((sum, image) => sum + estimateDataUrlBytes(image), 0);
+  if (totalBytes > CHAT_MAX_IMAGE_TOTAL_BYTES) {
+    throw new Error(`图片总大小不能超过 ${Math.round(CHAT_MAX_IMAGE_TOTAL_BYTES / 1024 / 1024)}MB`);
+  }
+
+  return normalizedImages;
+}
+
 async function resolveOllamaModel() {
   const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
   if (!response.ok) {
@@ -65,26 +95,63 @@ async function resolveOllamaModel() {
 }
 
 const _containerCache = new Map();
+const _containerLookupInflight = new Map();
+const _containerOperationInflight = new Map();
 
 async function resolveContainerName(serviceKey) {
   const cached = _containerCache.get(serviceKey);
   if (cached && (Date.now() - cached.ts) < 30000) return cached.name;
-  try {
-    const { stdout } = await execFileAsync('docker', [
-      'ps', '--filter', `label=com.docker.compose.service=${serviceKey}`,
-      '--format', '{{.Names}}'
-    ], { timeout: 10000 });
-    const name = String(stdout || '').trim().split('\n')[0];
-    if (!name) return null;
-    _containerCache.set(serviceKey, { name, ts: Date.now() });
-    return name;
-  } catch (_) {
-    return null;
+
+  const inflightLookup = _containerLookupInflight.get(serviceKey);
+  if (inflightLookup) {
+    return inflightLookup;
   }
+
+  const lookupPromise = (async () => {
+    try {
+      const { stdout } = await execFileAsync('docker', [
+        'ps', '--filter', `label=com.docker.compose.service=${serviceKey}`,
+        '--format', '{{.Names}}'
+      ], { timeout: 10000 });
+      const name = String(stdout || '').trim().split('\n')[0];
+      if (!name) {
+        _containerCache.delete(serviceKey);
+        return null;
+      }
+      _containerCache.set(serviceKey, { name, ts: Date.now() });
+      return name;
+    } catch (_) {
+      return null;
+    } finally {
+      _containerLookupInflight.delete(serviceKey);
+    }
+  })();
+
+  _containerLookupInflight.set(serviceKey, lookupPromise);
+  return lookupPromise;
 }
 
 function invalidateContainerCache() {
   _containerCache.clear();
+}
+
+async function withContainerOperation(containerName, action, task) {
+  const operationKey = `${action}:${containerName}`;
+  const inflightOperation = _containerOperationInflight.get(operationKey);
+  if (inflightOperation) {
+    return inflightOperation;
+  }
+
+  const operationPromise = (async () => {
+    try {
+      return await task();
+    } finally {
+      _containerOperationInflight.delete(operationKey);
+    }
+  })();
+
+  _containerOperationInflight.set(operationKey, operationPromise);
+  return operationPromise;
 }
 
 async function isContainerRunning(containerName) {
@@ -97,17 +164,21 @@ async function isContainerRunning(containerName) {
 }
 
 async function startContainerIfNeeded(containerName) {
-  if (await isContainerRunning(containerName)) {
-    return;
-  }
-  await runDockerCommand(['start', containerName], 180000);
+  await withContainerOperation(containerName, 'start', async () => {
+    if (await isContainerRunning(containerName)) {
+      return;
+    }
+    await runDockerCommand(['start', containerName], 180000);
+  });
 }
 
 async function stopContainerIfNeeded(containerName) {
-  if (!await isContainerRunning(containerName)) {
-    return;
-  }
-  await runDockerCommand(['stop', containerName], 180000);
+  await withContainerOperation(containerName, 'stop', async () => {
+    if (!await isContainerRunning(containerName)) {
+      return;
+    }
+    await runDockerCommand(['stop', containerName], 180000);
+  });
 }
 
 async function waitForServiceReady(url, timeoutMs = 240000, intervalMs = 3000) {
@@ -217,9 +288,7 @@ async function streamLocalModelResponse(res, prompt, mode = 'general', localMode
     throw new Error('未找到可用的本地模型配置');
   }
 
-  const normalizedImages = Array.isArray(images)
-    ? images.filter(image => image && typeof image === 'string' && image.startsWith('data:image/'))
-    : [];
+  const normalizedImages = normalizeChatImages(images);
 
   if (normalizedImages.length > 0 && !localModel.supportsImages) {
     throw new Error('当前本地模型不支持图片输入，请切换到 Qwen3-VL');
@@ -235,82 +304,93 @@ async function streamLocalModelResponse(res, prompt, mode = 'general', localMode
       ]
     : prompt;
 
-  const response = await fetch(`${localModel.url}/v1/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: localModel.model,
-      stream: false,
-      max_tokens: mode === 'interview' ? 384 : 512,
-      temperature: mode === 'interview' ? 0.2 : 0.3,
-      messages: [
-        { role: 'system', content: buildChatSystemPrompt(mode) },
-        { role: 'user', content: userContent }
-      ]
-    })
+  await withAIConcurrencyLimit('local', async () => {
+    const response = await fetch(`${localModel.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: localModel.model,
+        stream: false,
+        max_tokens: mode === 'interview' ? 384 : 512,
+        temperature: mode === 'interview' ? 0.2 : 0.3,
+        messages: [
+          { role: 'system', content: buildChatSystemPrompt(mode) },
+          { role: 'user', content: userContent }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`本地模型服务请求失败(${response.status}) ${errorText}`.trim());
+    }
+
+    const result = await response.json();
+    const content = result?.choices?.[0]?.message?.content || '';
+    if (!content) {
+      throw new Error('本地模型返回为空');
+    }
+    res.write(content);
   });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(`本地模型服务请求失败(${response.status}) ${errorText}`.trim());
-  }
-
-  const result = await response.json();
-  const content = result?.choices?.[0]?.message?.content || '';
-  if (!content) {
-    throw new Error('本地模型返回为空');
-  }
-  res.write(content);
   return localModel;
 }
 
 async function streamOllamaResponse(res, prompt, mode = 'general', preferredModel = null) {
   const model = preferredModel || await resolveOllamaModel();
-  const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      prompt,
-      stream: true,
-      options: { temperature: mode === 'interview' ? 0.6 : 0.7 }
-    })
-  });
+  await withAIConcurrencyLimit('ollama', async () => {
+    const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: true,
+        options: { temperature: mode === 'interview' ? 0.6 : 0.7 }
+      })
+    });
 
-  if (!ollamaResponse.ok || !ollamaResponse.body) {
-    const errorText = await ollamaResponse.text().catch(() => '');
-    throw new Error(`Ollama请求失败(${ollamaResponse.status}) ${errorText}`.trim());
-  }
+    if (!ollamaResponse.ok || !ollamaResponse.body) {
+      const errorText = await ollamaResponse.text().catch(() => '');
+      throw new Error(`Ollama请求失败(${ollamaResponse.status}) ${errorText}`.trim());
+    }
 
-  const reader = ollamaResponse.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
+    const reader = ollamaResponse.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const chunk = JSON.parse(line);
-      if (chunk.response) {
-        res.write(chunk.response);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let chunk;
+        try { chunk = JSON.parse(line); } catch { continue; }
+        if (chunk.response) {
+          res.write(chunk.response);
+        }
       }
     }
-  }
 
-  if (buffer.trim()) {
-    const lastChunk = JSON.parse(buffer);
-    if (lastChunk.response) {
-      res.write(lastChunk.response);
+    if (buffer.trim()) {
+      let lastChunk;
+      try { lastChunk = JSON.parse(buffer); } catch { lastChunk = null; }
+      if (lastChunk?.response) {
+        res.write(lastChunk.response);
+      }
     }
-  }
+  });
 }
 
-function createChatRouter() {
+function createChatRouter({ authMiddleware } = {}) {
   const router = express.Router();
+
+  // P2-5: 所有聊天路由需要认证
+  if (authMiddleware) {
+    router.use(authMiddleware);
+  }
 
   // 获取对话引擎状态
   router.get('/chat/runtime', async (req, res) => {
@@ -398,6 +478,7 @@ function createChatRouter() {
   router.post('/chat', async (req, res) => {
     try {
       const { message, mode = 'general', engine = 'auto', localModel = '', images = [] } = req.body || {};
+      const normalizedImages = validateChatImages(images);
 
       if (!message || !String(message).trim()) {
         return res.status(400).json({ error: '消息内容不能为空' });
@@ -422,7 +503,7 @@ function createChatRouter() {
           res.setHeader('X-LLM-Source', 'local');
           res.setHeader('X-LLM-Model', resolvedLocalModel?.model || LOCAL_LLM_MODEL);
           res.setHeader('X-LLM-Label', `local-${resolvedLocalModel?.model || LOCAL_LLM_MODEL}`);
-          await streamLocalModelResponse(res, prompt, mode, localModel, images);
+          await streamLocalModelResponse(res, prompt, mode, localModel, normalizedImages);
         } catch (localError) {
           if (forceLocal) {
             throw localError;
@@ -445,7 +526,12 @@ function createChatRouter() {
       res.end();
     } catch (error) {
       console.error('本地LLM对话失败:', error);
-      res.status(500).json({ error: `本地LLM对话失败: ${error.message}` });
+      if (res.headersSent) {
+        res.end();
+      } else {
+        const statusCode = error.code === 'AI_OVERLOADED' ? 503 : 500;
+        res.status(statusCode).json({ error: `本地LLM对话失败: ${error.message}` });
+      }
     }
   });
 
