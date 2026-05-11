@@ -81,7 +81,7 @@ const VHPanelToggle = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${colors.textMuted};
+  color: ${colors.muted};
   transition: all 0.2s;
 
   &:hover {
@@ -106,13 +106,30 @@ const VHAvatar = styled.div`
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: linear-gradient(135deg, ${colors.highlight} 0%, ${colors.accent} 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(139, 115, 85, 0.25);
+  box-shadow: 0 8px 32px rgba(37,99,235,0.3);
   animation: float 4s ease-in-out infinite;
+`;
+
+const VHStage = styled.div`
+  width: 100%;
+  max-width: 260px;
+  height: 320px;
+  border-radius: 20px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid ${colors.border};
+  box-shadow: 0 12px 32px rgba(37,99,235,0.12);
+
+  > div {
+    width: 100%;
+    height: 100%;
+  }
 `;
 
 const VHName = styled.div`
@@ -133,9 +150,38 @@ const VHDesc = styled.p`
 const VirtualHumanPanel = ({
   virtualHumanConnected,
   virtualHumanError,
+  virtualHumanStatus,
+  virtualHumanNeedsInteraction,
   isVirtualPanelCollapsed,
-  setIsVirtualPanelCollapsed
+  setIsVirtualPanelCollapsed,
+  sdkEnabled,
+  onRetryConnect,
+  speechEnabled,
+  audioMuted,
+  onToggleSpeechEnabled,
+  onToggleAudioMuted,
+  diagnosticSummary,
+  children
 }) => {
+  const statusMeta = (() => {
+    if (!sdkEnabled) {
+      return { label: '未启用', color: '#94A3B8', description: '当前环境未开启数字人能力' };
+    }
+    if (virtualHumanNeedsInteraction) {
+      return { label: '等待交互', color: '#F59E0B', description: '请点击页面任意位置以恢复数字人音频' };
+    }
+    if (virtualHumanError || virtualHumanStatus === 'error') {
+      return { label: '连接失败', color: '#EF4444', description: '数字人连接异常，可手动重试' };
+    }
+    if (virtualHumanStatus === 'connecting' || virtualHumanStatus === 'idle') {
+      return { label: '连接中', color: '#2563EB', description: '正在初始化数字人服务' };
+    }
+    if (virtualHumanConnected) {
+      return { label: '已连接', color: colors.success, description: '数字人已可播报面试问题与结束语' };
+    }
+    return { label: '未连接', color: '#94A3B8', description: '等待自动连接，仍可先使用文本模式' };
+  })();
+
   return (
     <VirtualHumanPanelStyled>
       <VHPanelHeader style={{ position: 'relative' }}>
@@ -147,18 +193,26 @@ const VirtualHumanPanel = ({
       </VHPanelHeader>
 
       <VHContent>
-        <VHAvatar>
-          {virtualHumanError ? (
-            <IconWarning size={48} color={colors.danger} />
-          ) : (
-            <IconBot size={48} color="#FFFFFF" />
-          )}
-        </VHAvatar>
+        {sdkEnabled ? (
+          <VHStage>
+            {children}
+          </VHStage>
+        ) : (
+          <VHAvatar>
+            {virtualHumanError ? (
+              <IconWarning size={48} color="#EF4444" />
+            ) : (
+              <IconBot size={48} color="#FFFFFF" />
+            )}
+          </VHAvatar>
+        )}
         <VHName>招聘灵犀</VHName>
         <VHDesc>
           {virtualHumanError
             ? '数字人服务连接失败，请检查网络配置或联系管理员'
-            : '随时为您服务，支持语音对话与实时面试评估'}
+            : sdkEnabled
+              ? '数字人已接入面试主链路，可跟随面试问题与结束语进行播报'
+              : '随时为您服务，支持语音对话与实时面试评估'}
         </VHDesc>
       </VHContent>
 
@@ -167,12 +221,83 @@ const VirtualHumanPanel = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
             width: 8, height: 8, borderRadius: '50%',
-            background: virtualHumanConnected ? colors.success : colors.danger
+            background: statusMeta.color
           }} />
-          <span style={{ fontSize: 13, color: colors.text }}>
-            {virtualHumanConnected ? '已连接' : '未连接'}
+          <span style={{ fontSize: 13, color: colors.ink }}>
+            {statusMeta.label}
           </span>
         </div>
+        <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 10, lineHeight: 1.6 }}>
+          {statusMeta.description}
+        </div>
+        {sdkEnabled && !virtualHumanConnected && onRetryConnect && (
+          <button
+            type="button"
+            onClick={onRetryConnect}
+            disabled={virtualHumanStatus === 'connecting'}
+            style={{
+              marginTop: 12,
+              width: '100%',
+              border: 'none',
+              borderRadius: 10,
+              padding: '10px 14px',
+              background: virtualHumanStatus === 'connecting' ? '#cbd5e1' : colors.accent,
+              color: '#fff',
+              cursor: virtualHumanStatus === 'connecting' ? 'not-allowed' : 'pointer',
+              fontSize: 13,
+              fontWeight: 600
+            }}
+          >
+            {virtualHumanStatus === 'connecting' ? '连接中...' : '重试连接数字人'}
+          </button>
+        )}
+        {sdkEnabled && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+            <button
+              type="button"
+              onClick={onToggleSpeechEnabled}
+              style={{
+                border: `1px solid ${speechEnabled ? '#bfdbfe' : '#fecaca'}`,
+                borderRadius: 10,
+                padding: '10px 12px',
+                background: speechEnabled ? '#eff6ff' : '#fef2f2',
+                color: speechEnabled ? '#1d4ed8' : '#b91c1c',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600
+              }}
+            >
+              {speechEnabled ? '播报已开启' : '播报已关闭'}
+            </button>
+            <button
+              type="button"
+              onClick={onToggleAudioMuted}
+              style={{
+                border: `1px solid ${audioMuted ? '#fecaca' : '#bfdbfe'}`,
+                borderRadius: 10,
+                padding: '10px 12px',
+                background: audioMuted ? '#fef2f2' : '#eff6ff',
+                color: audioMuted ? '#b91c1c' : '#1d4ed8',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600
+              }}
+            >
+              {audioMuted ? '当前静音' : '声音已开启'}
+            </button>
+          </div>
+        )}
+        {sdkEnabled && diagnosticSummary && (
+          <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#f8fafc', border: `1px solid ${colors.border}` }}>
+            <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>诊断摘要</div>
+            <div style={{ fontSize: 12, color: colors.ink }}>
+              最近事件数：{diagnosticSummary.count}
+            </div>
+            <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, lineHeight: 1.6 }}>
+              最近事件：{diagnosticSummary.lastEvent ? `${diagnosticSummary.lastEvent.type} · ${diagnosticSummary.lastEvent.detail}` : '暂无'}
+            </div>
+          </div>
+        )}
       </div>
     </VirtualHumanPanelStyled>
   );

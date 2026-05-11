@@ -18,6 +18,7 @@ import {
 import { motion } from 'framer-motion';
 import styled from 'styled-components';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import serverDataSync from '../utils/serverDataSync';
 import { getCandidateStats } from '../utils/candidateStats';
@@ -675,7 +676,8 @@ const ModalActionBar = styled.div`
 `;
 
 const ProfilePage = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -776,10 +778,24 @@ const ProfilePage = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         const resumes = Array.isArray(resumeRes.data) ? resumeRes.data : [];
+        // 获取模拟面试统计数据
+        let interviewCount = 0;
+        let interviewDuration = 0;
+        try {
+          const interviewStatsRes = await axios.get('/api/personal/interview/stats', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const interviewStats = interviewStatsRes.data || {};
+          interviewCount = interviewStats.completedSessions || interviewStats.totalSessions || 0;
+          // totalDuration 是秒，转换为分钟
+          interviewDuration = Math.round((interviewStats.totalDuration || 0) / 60);
+        } catch (interviewError) {
+          console.warn('获取面试统计数据失败:', interviewError);
+        }
         setStats({
           resumeCount: resumes.length,
-          interviewCount: 0,
-          interviewDuration: 0
+          interviewCount,
+          interviewDuration
         });
       } else {
         // Corp users: get candidate stats
@@ -933,15 +949,10 @@ const ProfilePage = () => {
         }
       });
       if (response.data.success) {
-        // 更新本地状态
-        setUserInfo({
-          ...userInfo,
-          name: values.name,
-          phone: values.phone || '未设置',
-          company: values.company || '未设置'
-        });
         setEditModalVisible(false);
         message.success('个人资料更新成功');
+        // 刷新页面显示更新后的信息
+        window.location.reload();
       }
     } catch (error) {
       console.error('保存失败:', error);
@@ -972,7 +983,10 @@ const ProfilePage = () => {
       });
       if (response.data.success) {
         setPasswordModalVisible(false);
-        message.success('密码修改成功');
+        message.success('密码修改成功，请重新登录');
+        // 清除登录状态，跳转到登录页
+        logout();
+        navigate('/login');
       }
     } catch (error) {
       console.error('密码修改失败:', error);
@@ -985,23 +999,24 @@ const ProfilePage = () => {
     Modal.confirm({
       title: '注销账户',
       icon: <ExclamationCircleOutlined />,
-      content: '确定要注销您的账户吗？此操作将删除您的所有数据，包括候选人信息、岗位信息等，且无法恢复。',
+      content: '确定要注销您的账户吗？此操作将删除您的所有数据，且无法恢复。',
       okText: '确认注销',
       cancelText: '取消',
       okType: 'danger',
       async onOk() {
         try {
           const token = localStorage.getItem('token');
-          const response = await axios.delete('/api/user', {
+          const userType = user?.userType || 'CORP';
+          const endpoint = userType === 'PERSONAL' ? '/api/personal' : '/api';
+          const response = await axios.delete(`${endpoint}/user`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
           });
           if (response.data.success) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('userInfo');
+            logout();
             message.success('账户已注销');
-            window.location.href = '/login';
+            navigate('/');
           }
         } catch (error) {
           console.error('注销失败:', error);

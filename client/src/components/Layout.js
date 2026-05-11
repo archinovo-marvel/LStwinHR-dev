@@ -153,27 +153,28 @@ const Layout = ({ children }) => {
   ];
 
   // Get userType from user object (stored in localStorage via AuthContext)
-  const userType = user?.userType || 'CORP';
+  const userType = user?.userType;
 
-  // Left side links — change based on userType
-  const leftLinks = userType === 'PERSONAL' ? [
+  // Left side links — guest only (not logged in)
+  const leftLinks = !user ? [
     { label: '关于我们', action: () => scrollToSection('statement') },
     { label: '了解我们', action: () => scrollToSection('services') },
     { label: '加入我们', action: () => scrollToSection('footer') },
-    { label: '简历优化', action: () => navigate('/personal/resume') },
-  ] : [
-    { label: '关于我们', action: () => scrollToSection('statement') },
-    { label: '了解我们', action: () => scrollToSection('services') },
-    { label: '加入我们', action: () => scrollToSection('footer') },
-    { label: '简历初筛', action: () => navigate('/resume') },
-    { label: '候选管理', action: () => navigate('/resume-analysis') },
-    { label: '面试访谈', action: () => navigate('/chat') },
-  ];
+  ] : [];
 
-  // Right side links — always these (except for guest)
+  // Right side links — enterprise menu for CORP user, personal menu for PERSONAL user, then user actions
   const rightLinks = user ? [
+    ...(userType === 'CORP' ? [
+      { label: '简历初筛', action: () => navigate('/resume') },
+      { label: '候选管理', action: () => navigate('/resume-analysis') },
+      { label: '面试访谈', action: () => navigate('/chat') },
+    ] : []),
+    ...(userType === 'PERSONAL' ? [
+      { label: '简历优化', action: () => navigate('/personal/resume') },
+      { label: '模拟面试', action: () => navigate('/personal/interview') },
+    ] : []),
     { label: '个人资料', action: () => navigate('/profile') },
-    { label: `${user.name}欢迎回来`, action: () => {} },
+    { label: `${user.name}欢迎回来`, action: () => navigate(userType === 'PERSONAL' ? '/personal/dashboard' : '/dashboard') },
     { label: '退出登录', action: () => { logout(); navigate('/'); } },
   ] : [];
 

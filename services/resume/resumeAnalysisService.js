@@ -670,7 +670,8 @@ class ResumeAnalysisService {
         model: LOCAL_VL_CONFIG.model,
         stream: false,
         max_tokens: 1600,
-        temperature: 0.1,
+        temperature: 0,
+        seed: 42,
         messages: [
           {
             role: 'system',
@@ -785,7 +786,8 @@ class ResumeAnalysisService {
           model: LOCAL_VL_CONFIG.model,
           stream: false,
           max_tokens: 1800,
-          temperature: 0.1,
+          temperature: 0,
+          seed: 42,
           messages
         }, {
           timeout: vlTimeoutMs,
@@ -839,14 +841,82 @@ class ResumeAnalysisService {
   }
 
   /**
+   * 构建评分校准参考框架
+   * 提供通用的评分标尺描述，帮助AI在不同候选人间保持评分一致性
+   * 这不是硬编码的评分标准，而是一个语义参考框架，AI仍需基于简历原文做出判断
+   */
+  buildScoringAnchors() {
+    return [
+      '【评分校准参考框架】',
+      '请基于以下通用评分标尺进行各维度打分，确保跨候选人评分标准一致：',
+      '',
+      '教育背景 (0-20分):',
+      '- 16-20分：名校硕博，专业与岗位高度对口，学术背景突出',
+      '- 11-15分：本科及以上学历，专业基本对口或有相关辅修/第二专业',
+      '- 6-10分：大专学历或专业部分相关，可通过经验弥补',
+      '- 0-5分：学历偏低或专业与岗位完全不符',
+      '',
+      '工作经历 (0-20分):',
+      '- 16-20分：3年以上高度相关工作经验，有行业知名企业背景，职级较高',
+      '- 11-15分：1-3年相关经验或实习经历丰富，有明确的职业成长路径',
+      '- 6-10分：有工作经验但行业/岗位相关性一般，或为初级岗位经验',
+      '- 0-5分：缺乏相关工作经验，或无正式工作经历',
+      '',
+      '项目经历 (0-30分):',
+      '- 24-30分：多个高质量项目，技术深度与广度俱佳，有可量化的成果与影响力',
+      '- 16-23分：有2个以上相关项目，项目描述详实，角色与贡献清晰',
+      '- 8-15分：有1-2个项目经历，但描述较简单，角色不够清晰',
+      '- 0-7分：无明显项目经历或项目与岗位无关',
+      '',
+      '技能匹配 (0-25分):',
+      '- 20-25分：核心技能全部覆盖，且有超出岗位要求的额外技能或证书',
+      '- 13-19分：覆盖大部分核心技能（≥60%），有1-2项突出技能',
+      '- 6-12分：覆盖部分核心技能（30%-60%），关键技能有缺失',
+      '- 0-5分：技能与岗位要求匹配度低（<30%），或技能描述模糊',
+      '',
+      '表达完整性 (0-5分):',
+      '- 5分：简历结构完整，信息详实，逻辑清晰，语言专业，无明显信息缺口',
+      '- 3-4分：基本信息完整，主要经历有描述，个别部分可更详尽',
+      '- 1-2分：有基本信息但缺乏细节，部分经历描述过于简略',
+      '- 0分：信息严重缺失，无法形成有效评估',
+      '',
+      'totalScore（综合评分，0-100分）:',
+      '- 85-100分：高度匹配，简历在多个维度表现优异，建议优先推进',
+      '- 70-84分：较好匹配，核心维度表现良好，建议进入下一轮',
+      '- 55-69分：基本匹配，部分维度有亮点但存在明显短板，建议复筛',
+      '- 40-54分：匹配度偏低，多维度存在不足，建议补充材料或谨慎考虑',
+      '- 0-39分：匹配度低，与岗位要求差距较大',
+      '',
+      '【重要提醒】以上标尺为通用参考框架，请始终基于简历原文中实际呈现的信息进行评分，',
+      '不要编造信息，不要因标尺描述而产生期望偏差。对于简历中未提及的信息，相应维度应给予较低分数。'
+    ].join('\n');
+  }
+
+  /**
    * 构建VL模型的用户提示词
    */
   buildVLUserPrompt(position, options = {}) {
     const positionConfig = getPositionConfig(position, options.positionConfig);
+    const mbtiType = options.mbti || '';
+
+    const mbtiSection = mbtiType ? `
+【MBTI岗位匹配度评分】
+候选人的MBTI类型为：${mbtiType}
+请基于以下维度评估该MBTI类型与目标岗位"${position || '未指定'}"的匹配度，并给出0-100分的评分：
+1. 该MBTI类型的典型性格特质（如领导力、沟通风格、决策方式、工作偏好）
+2. 目标岗位的核心要求（如团队协作、独立工作、压力应对、创新思维、细节把控）
+3. 性格特质与岗位要求的契合程度
+4. 潜在的性格优势可能带来的工作表现提升
+5. 可能需要关注或补足的方面
+
+输出中必须包含 mbtiMatchScore 字段（0-100的整数），以及 mbtiMatchReason 字段（简要说明评分理由）。
+` : '';
 
     return [
       `目标岗位：${position || '未指定'}`,
       `岗位核心技能要求：${(positionConfig?.coreSkills || []).slice(0, 5).join('、') || '未指定'}`,
+      this.buildScoringAnchors(),
+      '',
       '请基于简历原文输出一个合法 JSON 对象，不要输出 Markdown，不要补充解释。',
       '必须包含字段：summary、totalScore、basicInfo、extractedContent、scores、strengths、risks、suggestions、interviewQuestions、recommendation。',
       'basicInfo 包含：name、phone、email、jobIntention。',
@@ -855,6 +925,7 @@ class ResumeAnalysisService {
       'risks 每项包含：title、severity(high|medium|low)、suggestion。',
       'recommendation 包含：level、reason。',
       '如果信息缺失，请返回空字符串或空数组，不要编造。',
+      mbtiSection,
       '',
       '【面试建议要求】interviewQuestions 必须严格基于简历原文内容生成 3-5 条具体的面试提问：',
       '1. 必须引用简历中具体的项目名称、公司名称、技能或经历，例如："请详细介绍你在XX项目中负责的具体工作内容？"',
@@ -864,7 +935,7 @@ class ResumeAnalysisService {
       '5. 格式为问句形式，便于面试官直接使用',
       '',
       'JSON 模板：{"summary":"","totalScore":0,"basicInfo":{"name":"","phone":"","email":"","jobIntention":""},"extractedContent":{"education":[],"workExperience":[],"projectExperience":[],"skills":[]},"scores":{"education":0,"work":0,"project":0,"skill":0,"expression":0},"strengths":[],"risks":[],"suggestions":[],"interviewQuestions":[],"recommendation":{"level":"","reason":""}}'
-    ].join('\n');
+    ].filter(Boolean).join('\n');
   }
 
   isUsableVLTextResponse(content) {
@@ -1229,6 +1300,10 @@ class ResumeAnalysisService {
     const positionConfig = getPositionConfig(position, options.positionConfig);
     const coreSkills = this.safeArray(positionConfig?.coreSkills || []);
 
+    // 解析 AI 生成的 MBTI 岗位匹配度评分
+    const mbtiMatchScore = this.clampNumber(parsed.mbtiMatchScore, 0, 100) || null;
+    const mbtiMatchReason = this.safeString(parsed.mbtiMatchReason) || '';
+
     return {
       ...baseResult,
       parseStatus: ParseStatus.SUCCESS,
@@ -1269,7 +1344,9 @@ class ResumeAnalysisService {
           normalized.risks,
           position
         )
-      }
+      },
+      mbtiMatchScore,  // AI 生成的 MBTI 岗位匹配度评分
+      mbtiMatchReason  // MBTI 匹配度评分理由
     };
   }
 
@@ -1422,7 +1499,8 @@ class ResumeAnalysisService {
     const trimmedText = text.slice(0, this.getMaxResumeTextLength());
     const payload = {
       model: config.model,
-      temperature: 0.2,
+      temperature: 0,
+      seed: 42,
       messages: [
         {
           role: 'system',
@@ -1477,11 +1555,27 @@ class ResumeAnalysisService {
     const candidateProfile = options.candidateProfile && typeof options.candidateProfile === 'object'
       ? options.candidateProfile
       : {};
+    const mbtiType = candidateProfile.mbti || options.mbti || '';
+
+    const mbtiSection = mbtiType ? `
+【MBTI岗位匹配度评分】
+候选人的MBTI类型为：${mbtiType}
+请基于以下维度评估该MBTI类型与目标岗位”${position || '未指定'}”的匹配度，并给出0-100分的评分：
+1. 该MBTI类型的典型性格特质（如领导力、沟通风格、决策方式、工作偏好）
+2. 目标岗位的核心要求（如团队协作、独立工作、压力应对、创新思维、细节把控）
+3. 性格特质与岗位要求的契合程度
+4. 潜在的性格优势可能带来的工作表现提升
+5. 可能需要关注或补足的方面
+
+输出中必须包含 mbtiMatchScore 字段（0-100的整数），以及 mbtiMatchReason 字段（简要说明评分理由）。
+` : '';
 
     return [
       `目标岗位：${position || '未指定'}`,
       `候选人基础信息：${JSON.stringify(candidateProfile, null, 2)}`,
       `岗位画像：${JSON.stringify(positionConfig || {}, null, 2)}`,
+      this.buildScoringAnchors(),
+      '',
       '请阅读下面的简历文本，并输出一个严格符合以下要求的JSON对象：',
       '1. 你需要以资深HR口吻完成结构化分析和打分。',
       '2. 打分字段必须包含：educationScore(0-20)、workScore(0-20)、projectScore(0-30)、skillScore(0-25)、expressionScore(0-5)、riskPenalty(0-20)、resumeScore(0-100)。',
@@ -1503,6 +1597,7 @@ class ResumeAnalysisService {
       '    - 避免泛泛而谈的通用问题',
       '    - 格式为面试官可直接提问的问句',
       '15. 所有内容必须基于简历原文，没有证据就留空、写”未提及”或不填，不要编造。',
+      mbtiSection,
       `原始解析状态：${options.parserStatus || ParseStatus.SUCCESS}`,
       options.parserError ? `原始解析备注：${options.parserError}` : '',
       '简历文本开始：',
@@ -1600,9 +1695,14 @@ class ResumeAnalysisService {
     const summary = this.normalizeSummary(safe.summary, totalScore, recommendation, strengths, risks);
     const evidences = this.normalizeEvidences(safe.evidences || []);
 
+    // 解析 AI 生成的 MBTI 岗位匹配度评分
+    const mbtiMatchScore = this.clampNumber(safe.mbtiMatchScore, 0, 100) || null;
+    const mbtiMatchReason = this.safeString(safe.mbtiMatchReason) || '';
+
     return {
       ...base,
       parseStatus: ParseStatus.SUCCESS,
+      sourceText: text,  // 简历源文本（PDF/Word直接提取，或图片OCR识别）
       summary,
       totalScore,
       grade: this.getGrade(totalScore),
@@ -1618,6 +1718,8 @@ class ResumeAnalysisService {
       scoreWeights: getPositionConfig(position, options.positionConfig)?.weights || {},
       smartInsights,
       recommendation,
+      mbtiMatchScore,  // AI 生成的 MBTI 岗位匹配度评分
+      mbtiMatchReason, // MBTI 匹配度评分理由
       metadata: {
         ...base.metadata,
         position,

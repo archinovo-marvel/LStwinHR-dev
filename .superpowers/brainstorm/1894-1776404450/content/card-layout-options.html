@@ -1,0 +1,60 @@
+<h2>首页卡片布局调整</h2>
+<p class="subtitle">三个核心功能卡片目前宽度不等，左侧有空白。如何调整？</p>
+
+<div class="options">
+  <div class="option" data-choice="current" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>当前布局</h3>
+      <p>每卡片宽6列（共24列），三卡片总宽18列，左侧留白。</p>
+      <div class="mockup">
+        <div class="mockup-header">当前首页卡片区域</div>
+        <div class="mockup-body" style="padding: 16px;">
+          <div style="display: flex; gap: 10px; border: 1px dashed #ccc; padding: 12px; border-radius: 8px;">
+            <div style="flex: 0 0 6/24; background: #E8F2FF; padding: 12px; border-radius: 8px; text-align: center;">简历初筛</div>
+            <div style="flex: 0 0 6/24; background: #D1FAE5; padding: 12px; border-radius: 8px; text-align: center;">候选管理</div>
+            <div style="flex: 0 0 6/24; background: #EDE9FE; padding: 12px; border-radius: 8px; text-align: center;">面试访谈</div>
+            <div style="flex: 1; background: #F7F9FC; border: 1px dashed #94A3B8; border-radius: 8px; text-align: center; color: #94A3B8;">左侧空白</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="equal-three" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>三等分宽度</h3>
+      <p>每卡片宽8列（24/3），三卡片等宽占满整行，无空白。</p>
+      <div class="mockup">
+        <div class="mockup-header">三等分布局</div>
+        <div class="mockup-body" style="padding: 16px;">
+          <div style="display: flex; gap: 10px; border: 1px dashed #ccc; padding: 12px; border-radius: 8px;">
+            <div style="flex: 1; background: #E8F2FF; padding: 12px; border-radius: 8px; text-align: center;">简历初筛</div>
+            <div style="flex: 1; background: #D1FAE5; padding: 12px; border-radius: 8px; text-align: center;">候选管理</div>
+            <div style="flex: 1; background: #EDE9FE; padding: 12px; border-radius: 8px; text-align: center;">面试访谈</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="stretch-fill" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>拉伸填充</h3>
+      <p>卡片宽度适当拉长，填补左侧空白，保持视觉平衡。</p>
+      <div class="mockup">
+        <div class="mockup-header">拉伸填充布局</div>
+        <div class="mockup-body" style="padding: 16px;">
+          <div style="display: flex; gap: 10px; border: 1px dashed #ccc; padding: 12px; border-radius: 8px;">
+            <div style="flex: 1.2; background: #E8F2FF; padding: 12px; border-radius: 8px; text-align: center;">简历初筛</div>
+            <div style="flex: 1.2; background: #D1FAE5; padding: 12px; border-radius: 8px; text-align: center;">候选管理</div>
+            <div style="flex: 1.2; background: #EDE9FE; padding: 12px; border-radius: 8px; text-align: center;">面试访谈</div>
+          </div>
+          <p style="font-size: 12px; color: #666; margin-top: 8px;">注：卡片宽度略微增加，但不等分</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -33,11 +33,11 @@ import styled from 'styled-components';
 import axios from 'axios';
 import candidateDB from '../utils/candidateDB';
 import serverDataSync from '../utils/serverDataSync';
+import { colors } from '../theme/colors';
+
 const { Option } = Select;
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
-
-import { colors } from '../theme/colors';
 
 // 页面容器
 const FormContainer = styled.div`
@@ -398,6 +398,27 @@ const SecondaryButton = styled(Button)`
   }
 `;
 
+// 幽灵按钮（重新填写）
+const GhostButton = styled(Button)`
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  background: transparent;
+  padding: 0 32px;
+
+  &:hover {
+    border-color: ${colors.highlight};
+    color: ${colors.highlight};
+  }
+
+  &:active {
+    border-color: ${colors.highlight};
+    color: ${colors.highlight};
+  }
+`;
+
 // 按钮组
 const ButtonGroup = styled.div`
   display: flex;
@@ -428,6 +449,15 @@ const CandidateForm = () => {
     }
   })();
 
+  // 从 URL 查询参数提取 token（用于二维码扫码等公开访问场景）
+  const publicToken = (() => {
+    try {
+      return new URL(window.location.href).searchParams.get('token') || null;
+    } catch (error) {
+      return null;
+    }
+  })();
+
   useEffect(() => {
     fetchAvailablePositions();
   }, []);
@@ -435,15 +465,15 @@ const CandidateForm = () => {
   const fetchAvailablePositions = async () => {
     setPositionsLoading(true);
     try {
-      const positions = await serverDataSync.getAvailablePositions({ ownerId });
+      const positions = await serverDataSync.getAvailablePositions({ ownerId, token: publicToken });
       if (Array.isArray(positions) && positions.length > 0) {
         setAvailablePositions(positions.map(p => p.name));
       } else {
-        setAvailablePositions(['商务管培生', '运营管培生', '数据类管培生', '供应链管培生', '设计类管培生', '人力管培生']);
+        setAvailablePositions([]);
       }
     } catch (error) {
       console.error('获取岗位列表失败:', error);
-      setAvailablePositions(['商务管培生', '运营管培生', '数据类管培生', '供应链管培生', '设计类管培生', '人力管培生']);
+      setAvailablePositions([]);
     } finally {
       setPositionsLoading(false);
     }
@@ -775,7 +805,9 @@ const CandidateForm = () => {
         console.log('⚠️ 没有找到有效的文件对象');
       }
       
-      const savedCandidate = await serverDataSync.addCandidateWithFile(formData, { ownerId });
+      const savedCandidate = publicToken
+        ? await serverDataSync.addCandidatePublic(formData, { token: publicToken })
+        : await serverDataSync.addCandidateWithFile(formData, { ownerId });
       console.log('候选人数据已保存到服务器，电脑端将实时看到更新');
       
       console.log('当前域名:', window.location.origin);
@@ -1086,7 +1118,7 @@ const CandidateForm = () => {
             <Text style={{ display: 'block', color: colors.textMuted, fontSize: '14px', marginBottom: '40px' }}>
               HR将尽快与您联系
             </Text>
-            <PrimaryButton 
+            <GhostButton
               size="large"
               onClick={async () => {
                 form.resetFields();
@@ -1099,7 +1131,7 @@ const CandidateForm = () => {
             >
               <ReloadOutlined style={{ marginRight: '8px' }} />
               重新填写
-            </PrimaryButton>
+            </GhostButton>
           </motion.div>
         </div>
       </div>

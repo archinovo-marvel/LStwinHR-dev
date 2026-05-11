@@ -57,12 +57,12 @@ const VHAvatar = styled.div`
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: linear-gradient(135deg, ${colors.highlight} 0%, ${colors.accent} 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(139, 115, 85, 0.25);
+  box-shadow: 0 8px 32px rgba(37,99,235,0.3);
   animation: float 4s ease-in-out infinite;
 `;
 
@@ -78,12 +78,12 @@ const Avatar = styled.div`
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: ${props => props.$isUser ? colors.accent : `linear-gradient(135deg, ${colors.highlight} 0%, ${colors.accent} 100%)`};
+  background: ${props => props.$isUser ? '#2563EB' : `linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)`};
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px ${props => props.$isUser ? 'rgba(44, 44, 44, 0.2)' : 'rgba(139, 115, 85, 0.2)'};
+  box-shadow: 0 4px 12px ${props => props.$isUser ? 'rgba(37,99,235,0.25)' : 'rgba(37,99,235,0.2)'};
 `;
 
 const Bubble = styled.div`
@@ -129,8 +129,8 @@ const StatusPill = styled.span`
   gap: 5px;
   padding: 3px 10px;
   border-radius: 12px;
-  background: ${props => props.$active ? colors.bgSecondary : 'rgba(16, 185, 129, 0.1)'};
-  color: ${props => props.$active ? colors.text : colors.success};
+  background: ${props => props.$active ? colors.frost : 'rgba(34,197,94,0.1)'};
+  color: ${props => props.$active ? colors.ink : colors.success};
   font-size: 11px;
 `;
 

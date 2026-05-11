@@ -3,10 +3,20 @@ const crypto = require('crypto');
 
 // In-memory login rate limiter: max 10 attempts per 15 minutes per IP
 const _loginAttempts = new Map();
+let _loginAttemptsSweepTs = 0;
 function checkLoginRateLimit(ip) {
   const now = Date.now();
   const windowMs = 15 * 60 * 1000;
   const maxAttempts = 10;
+
+  // Sweep stale entries at most once per minute to prevent unbounded Map growth
+  if (now - _loginAttemptsSweepTs > 60 * 1000) {
+    _loginAttemptsSweepTs = now;
+    for (const [key, val] of _loginAttempts) {
+      if (now - val.windowStart > windowMs) _loginAttempts.delete(key);
+    }
+  }
+
   let entry = _loginAttempts.get(ip);
   if (!entry || now - entry.windowStart > windowMs) {
     entry = { count: 0, windowStart: now };

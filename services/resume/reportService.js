@@ -86,7 +86,34 @@ class ReportService {
       (existingScores.educationScore > 0 || existingScores.workScore > 0 ||
        existingScores.projectScore > 0 || existingScores.skillScore > 0);
 
+    const extractedContent = safeAnalysis.extractedContent || {};
+    const hasListContent = (list, fields = []) => Array.isArray(list) && list.some(item => {
+      if (typeof item === 'string') {
+        return item.trim().length > 0;
+      }
+      return fields.some(field => {
+        const value = item?.[field];
+        if (Array.isArray(value)) {
+          return value.some(entry => String(entry || '').trim().length > 0);
+        }
+        return String(value || '').trim().length > 0;
+      });
+    });
+
+    const hasEducationContent = hasListContent(extractedContent.education, ['school', 'major', 'degree']);
+    const hasWorkContent = hasListContent(extractedContent.workExperience, ['company', 'companyOrOrg', 'position', 'role', 'description', 'responsibilities']);
+    const hasProjectContent = hasListContent(extractedContent.projectExperience || extractedContent.projects, ['projectName', 'name', 'role', 'description', 'responsibilities']);
+    const hasSkillsContent = Array.isArray(extractedContent.skills) && extractedContent.skills.length > 0;
+
+    const shouldBackfillExistingScores = hasValidScores && (
+      (hasEducationContent && !(Number(existingScores.educationScore) > 0)) ||
+      (hasWorkContent && !(Number(existingScores.workScore) > 0)) ||
+      (hasProjectContent && !(Number(existingScores.projectScore) > 0)) ||
+      (hasSkillsContent && !(Number(existingScores.skillScore) > 0))
+    );
+
     if (hasValidScores) {
+      if (!shouldBackfillExistingScores) {
       // 确保 resumeScore 是细则评分之和
       const resumeScore = existingScores.resumeScore ||
         (Number(existingScores.educationScore) || 0) +
@@ -103,17 +130,52 @@ class ReportService {
           resumeScore
         }
       };
+      }
     }
 
     // 只有在没有有效分数时才调用 scoringService
     const scoreResult = scoringService.calculateTotalScore({
-      extractedContent: safeAnalysis.extractedContent,
+      extractedContent: {
+        ...extractedContent,
+        projects: extractedContent.projects || extractedContent.projectExperience || []
+      },
       skillMatch: safeAnalysis.matchResult || safeAnalysis.skillMatch,
       skillEvidence: safeAnalysis.skillEvidence || [],
       educationMatch: safeAnalysis.educationMatch,
       experienceMatch: safeAnalysis.experienceMatch,
       risks: safeAnalysis.risks || []
     }, position, { positionConfig });
+
+    if (hasValidScores) {
+      const mergedScores = {
+        ...existingScores,
+        educationScore: Number(existingScores.educationScore) > 0 ? existingScores.educationScore : scoreResult.scoreSummary.educationScore,
+        workScore: Number(existingScores.workScore) > 0 ? existingScores.workScore : scoreResult.scoreSummary.workScore,
+        projectScore: Number(existingScores.projectScore) > 0 ? existingScores.projectScore : scoreResult.scoreSummary.projectScore,
+        skillScore: Number(existingScores.skillScore) > 0 ? existingScores.skillScore : scoreResult.scoreSummary.skillScore,
+        expressionScore: Number(existingScores.expressionScore) > 0 ? existingScores.expressionScore : scoreResult.scoreSummary.expressionScore,
+        riskPenalty: Number(existingScores.riskPenalty) > 0 ? existingScores.riskPenalty : scoreResult.scoreSummary.riskPenalty,
+      };
+
+      const resumeScore =
+        (Number(mergedScores.educationScore) || 0) +
+        (Number(mergedScores.workScore) || 0) +
+        (Number(mergedScores.projectScore) || 0) +
+        (Number(mergedScores.skillScore) || 0) +
+        (Number(mergedScores.expressionScore) || 0);
+
+      return {
+        ...safeAnalysis,
+        totalScore: safeAnalysis.totalScore || resumeScore,
+        grade: safeAnalysis.grade || scoreResult.grade,
+        recommendation: safeAnalysis.recommendation || scoreResult.recommendation,
+        dimensionScores: safeAnalysis.dimensionScores || scoreResult.dimensionScores,
+        scores: {
+          ...mergedScores,
+          resumeScore
+        }
+      };
+    }
 
     return {
       ...safeAnalysis,

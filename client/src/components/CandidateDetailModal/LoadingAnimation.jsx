@@ -1,133 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { LoadingOutlined, ScanOutlined, CloudOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { Progress, Typography } from 'antd';
+import React, { useState, useEffect, useRef } from 'react';
 import './CandidateDetailModal.css';
 
-const { Title, Text } = Typography;
-
-const ANALYSIS_STAGE_META = {
-  'local-VL排队中': {
-    stepIndex: 0,
-    progressFloor: 4,
-    progressCeiling: 12,
-    title: '正在等待串行处理',
-    tip: '当前服务器仅串行执行一个local-VL任务，请稍候...',
-    accent: '#D97706'
-  },
-  'Qwen3.5-9B排队中': {
-    stepIndex: 0,
-    progressFloor: 4,
-    progressCeiling: 12,
-    title: '正在等待串行处理',
-    tip: '当前服务器仅串行执行一个Qwen3.5-9B任务，请稍候...',
-    accent: '#D97706'
-  },
-  'local-VL分析准备中': {
-    stepIndex: 0,
-    progressFloor: 8,
-    progressCeiling: 18,
-    title: '正在准备重新分析',
-    tip: '正在初始化local-VL分析任务，请稍候...',
-    accent: '#2563EB'
-  },
-  'Qwen3.5-9B分析准备中': {
-    stepIndex: 0,
-    progressFloor: 8,
-    progressCeiling: 18,
-    title: '正在准备重新分析',
-    tip: '正在初始化Qwen3.5-9B分析任务，请稍候...',
-    accent: '#2563EB'
-  },
-  'PDF解析中': {
-    stepIndex: 0,
-    progressFloor: 18,
-    progressCeiling: 38,
-    title: '正在解析简历文件',
-    tip: '正在提取PDF中的图像与文本内容...',
-    accent: '#4F46E5'
-  },
-  'local-VL OCR分析中': {
-    stepIndex: 1,
-    progressFloor: 38,
-    progressCeiling: 68,
-    title: '正在执行local-VL OCR',
-    tip: '正在通过local-VL识别简历版面与正文...',
-    accent: '#0891B2'
-  },
-  'Qwen3.5-9B OCR分析中': {
-    stepIndex: 1,
-    progressFloor: 38,
-    progressCeiling: 68,
-    title: '正在执行Qwen3.5-9B OCR',
-    tip: '正在通过Qwen3.5-9B识别简历版面与正文...',
-    accent: '#0891B2'
-  },
-  'OCR融合分析中': {
-    stepIndex: 1,
-    progressFloor: 46,
-    progressCeiling: 74,
-    title: '正在执行OCR融合',
-    tip: '正在融合Tesseract OCR与local-VL OCR结果...',
-    accent: '#0D9488'
-  },
-  'DeepSeek分析中': {
-    stepIndex: 2,
-    progressFloor: 72,
-    progressCeiling: 94,
-    title: '正在执行DeepSeek分析',
-    tip: '正在使用备用分析链路生成结构化结果...',
-    accent: '#7C3AED'
-  },
-  'local-VL文本分析中': {
-    stepIndex: 2,
-    progressFloor: 68,
-    progressCeiling: 92,
-    title: '正在执行local-VL文本分析',
-    tip: '正在生成结构化结果与综合评估...',
-    accent: '#2563EB'
-  },
-  'Qwen3.5-9B文本分析中': {
-    stepIndex: 2,
-    progressFloor: 68,
-    progressCeiling: 92,
-    title: '正在执行Qwen3.5-9B文本分析',
-    tip: '正在生成结构化结果与综合评估...',
-    accent: '#2563EB'
-  },
-  '分析中': {
-    stepIndex: 0,
-    progressFloor: 8,
-    progressCeiling: 18,
-    title: '正在分析简历',
-    tip: '正在进行简历分析...',
-    accent: '#2563EB'
-  },
-  '待分析': {
-    stepIndex: 0,
-    progressFloor: 0,
-    progressCeiling: 5,
-    title: '等待分析',
-    tip: '简历已上传，等待分析...',
-    accent: '#EA580C'
-  }
+const STAGE_META = {
+  'local-VL排队中': { step: 0, color: '#D97706', label: '等待队列' },
+  'Qwen3.5-9B排队中': { step: 0, color: '#D97706', label: '等待队列' },
+  'local-VL分析准备中': { step: 0, color: '#2563EB', label: '初始化模型' },
+  'Qwen3.5-9B分析准备中': { step: 0, color: '#2563EB', label: '初始化模型' },
+  'PDF解析中': { step: 1, color: '#4F46E5', label: '文件解析' },
+  'local-VL OCR分析中': { step: 1, color: '#0891B2', label: '视觉识别' },
+  'Qwen3.5-9B OCR分析中': { step: 1, color: '#0891B2', label: '视觉识别' },
+  'OCR融合分析中': { step: 1, color: '#0D9488', label: '信息融合' },
+  'DeepSeek分析中': { step: 2, color: '#7C3AED', label: '智能分析' },
+  'local-VL文本分析中': { step: 2, color: '#2563EB', label: '结构化提取' },
+  'Qwen3.5-9B文本分析中': { step: 2, color: '#2563EB', label: '结构化提取' },
+  '分析中': { step: 0, color: '#2563EB', label: '处理中' },
+  '待分析': { step: 0, color: '#EA580C', label: '等待中' }
 };
 
-/**
- * 分析进度动画组件
- * 显示简历分析过程中的加载状态、进度条和分析步骤
- */
-const AnalysisLoadingProgress = ({ mode, liveStatus }) => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [progress, setProgress] = useState(0);
+const STEPS = ['文件解析', 'AI分析', '报告生成'];
 
-  const steps = [
-    { icon: <ScanOutlined />, title: '解析简历', desc: '正在提取简历关键信息...' },
-    { icon: <CloudOutlined />, title: 'AI分析', desc: '正在进行智能匹配分析...' },
-    { icon: <CheckCircleOutlined />, title: '生成报告', desc: '正在生成评估结果...' }
-  ];
+const TechLoadingAnimation = ({ mode, liveStatus }) => {
+  const [activeStep, setActiveStep] = useState(0);
+  const [dots] = useState([0, 1, 2]);
+  const [bars, setBars] = useState([20, 45, 70, 35, 80, 55, 90, 40, 65, 50]);
+  const barRef = useRef(null);
 
-  const modeLabel = mode === 'local-vl' ? 'Qwen3.5-9B多模态模型' : mode === 'deepseek' ? 'DeepSeek API' : '默认模式';
-  const normalizedStageTitle = String(liveStatus?.title || '')
+  const stageKey = String(liveStatus?.title || '分析中');
+  const normalizedKey = stageKey
     .replace('Qwen3.5-9B排队中', 'Qwen3.5-9B排队中')
     .replace('Qwen3.5-9B分析准备中', 'Qwen3.5-9B分析准备中')
     .replace('Qwen3.5-9B OCR分析中', 'Qwen3.5-9B OCR分析中')
@@ -136,91 +35,104 @@ const AnalysisLoadingProgress = ({ mode, liveStatus }) => {
     .replace('local-VL分析准备中', 'Qwen3.5-9B分析准备中')
     .replace('local-VL OCR分析中', 'Qwen3.5-9B OCR分析中')
     .replace('local-VL文本分析中', 'Qwen3.5-9B文本分析中');
-  const stageMeta = ANALYSIS_STAGE_META[normalizedStageTitle] || ANALYSIS_STAGE_META['Qwen3.5-9B分析准备中'];
+
+  const meta = STAGE_META[normalizedKey] || STAGE_META['分析中'];
+  const modeLabel = mode === 'local-vl' ? 'Qwen3.5-9B 多模态' : mode === 'deepseek' ? 'DeepSeek API' : '默认模式';
 
   useEffect(() => {
-    setCurrentStep(stageMeta.stepIndex);
-    setProgress(prev => {
-      const nextProgress = Math.max(prev, stageMeta.progressFloor);
-      return Math.min(nextProgress, stageMeta.progressCeiling);
-    });
-  }, [stageMeta]);
+    setActiveStep(meta.step);
+  }, [meta.step]);
 
   useEffect(() => {
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= stageMeta.progressCeiling) {
-          return prev;
-        }
-        const delta = stageMeta.stepIndex === 2 ? Math.random() * 1.8 + 0.6 : Math.random() * 3 + 1.2;
-        return Math.min(prev + delta, stageMeta.progressCeiling);
-      });
-    }, 220);
-
-    return () => {
-      clearInterval(progressInterval);
-    };
-  }, [stageMeta]);
+    const interval = setInterval(() => {
+      setBars(prev => prev.map((h, i) => {
+        const base = 20 + (i * 7);
+        const variation = Math.sin(Date.now() / 300 + i * 0.8) * 25;
+        return Math.max(15, Math.min(95, base + variation));
+      }));
+    }, 180);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <div className="analysis-loading-container">
-      <div className="analysis-loading-header">
-        <LoadingOutlined className="analysis-loading-spinner" />
-        <Title level={4} className="analysis-loading-title">{stageMeta.title}</Title>
-        <Text className="analysis-loading-mode">当前模式：{modeLabel}</Text>
-        {liveStatus?.message && <Text className="analysis-loading-mode">{liveStatus.message}</Text>}
+    <div className="tech-loading-container">
+      <div className="tech-loading-header">
+        <div className="tech-ring-wrapper">
+          <svg className="tech-ring" viewBox="0 0 120 120" fill="none">
+            <circle cx="60" cy="60" r="52" stroke="#E2E8F0" strokeWidth="6" />
+            <circle
+              cx="60" cy="60" r="52"
+              stroke={meta.color}
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray="82 245"
+              className="tech-ring-arc"
+              style={{ '--ring-color': meta.color }}
+            />
+            <circle cx="60" cy="60" r="38" fill="none" stroke={meta.color} strokeWidth="1.5" opacity="0.25" />
+            <circle cx="60" cy="60" r="4" fill={meta.color} className="tech-ring-core" />
+          </svg>
+          <div className="tech-ring-step-num" style={{ color: meta.color }}>
+            {activeStep + 1}
+          </div>
+        </div>
+
+        <div className="tech-loading-text">
+          <div className="tech-loading-stage" style={{ color: meta.color }}>
+            {meta.label}
+          </div>
+          <div className="tech-loading-status">
+            {liveStatus?.message || liveStatus?.title || '简历分析进行中...'}
+          </div>
+          <div className="tech-loading-mode">{modeLabel}</div>
+        </div>
       </div>
 
-      <div className="analysis-progress-wrapper">
-        <Progress
-          percent={Math.min(Math.round(progress), 95)}
-          status="active"
-          strokeColor={{
-            '0%': stageMeta.accent || '#2F80ED',
-            '100%': '#10B981'
-          }}
-          trailColor="#E8F2FF"
-          strokeWidth={12}
-          className="analysis-progress-bar"
-        />
-      </div>
-
-      <div className="analysis-steps-container">
-        {steps.map((step, index) => (
-          <div
-            key={index}
-            className={`analysis-step ${index === currentStep ? 'active' : ''} ${index < currentStep ? 'completed' : ''}`}
-          >
-            <div className="analysis-step-icon">
-              {index < currentStep ? <CheckCircleOutlined /> : step.icon}
-            </div>
-            <div className="analysis-step-content">
-              <Text strong className="analysis-step-title">{step.title}</Text>
-              <Text className="analysis-step-desc">
-                {index === currentStep
-                  ? (liveStatus?.message || step.desc)
-                  : index < currentStep
-                    ? '已完成'
-                    : '等待中'}
-              </Text>
-            </div>
-            {index < steps.length - 1 && (
-              <div className={`analysis-step-line ${index < currentStep ? 'completed' : ''}`} />
+      <div className="tech-steps-row">
+        {STEPS.map((step, i) => (
+          <div key={i} className={`tech-step-item ${i < activeStep ? 'done' : i === activeStep ? 'active' : ''}`}>
+            <div className="tech-step-dot" style={i <= activeStep ? { background: meta.color, boxShadow: `0 0 8px ${meta.color}` } : {}} />
+            <span className="tech-step-label">{step}</span>
+            {i < STEPS.length - 1 && (
+              <div className={`tech-step-line ${i < activeStep ? 'done' : ''}`} style={i < activeStep ? { background: meta.color } : {}} />
             )}
           </div>
         ))}
       </div>
 
-      <div className="analysis-loading-footer">
-        <div className="analysis-loading-pulse">
-          <span className="pulse-dot"></span>
-          <span className="pulse-dot"></span>
-          <span className="pulse-dot"></span>
+      <div className="tech-bars-wrapper">
+        <div className="tech-bars-grid">
+          {bars.map((height, i) => (
+            <div key={i} className="tech-bar-slot">
+              <div
+                className="tech-bar"
+                style={{
+                  height: `${height}%`,
+                  background: i <= activeStep ? meta.color : '#CBD5E1',
+                  opacity: i <= activeStep ? 1 : 0.4,
+                  transition: 'height 0.25s ease, background 0.4s ease'
+                }}
+              />
+            </div>
+          ))}
         </div>
-        <Text className="analysis-loading-tip">{stageMeta.tip}</Text>
+        <div className="tech-bars-label">数据处理中</div>
+      </div>
+
+      <div className="tech-loading-dots">
+        {dots.map(i => (
+          <span
+            key={i}
+            className="tech-dot"
+            style={{
+              background: i <= activeStep ? meta.color : '#CBD5E1',
+              transition: 'background 0.4s ease'
+            }}
+          />
+        ))}
       </div>
     </div>
   );
 };
 
-export default AnalysisLoadingProgress;
+export default TechLoadingAnimation;

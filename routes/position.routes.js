@@ -6,15 +6,20 @@ const {
   upsertPositionForUser,
   deletePositionById
 } = require('../services/candidateStore');
-const { authMiddleware } = require('../middleware/auth.middleware');
+const { authMiddleware } = require('../server/middleware/auth.middleware');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_change_this_in_production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
 
 function resolvePositionAccessContext(req) {
+  // 优先从 Authorization 头获取 token（已登录用户），
+  // 其次从查询参数获取（二维码扫码等公开访问场景）
   const bearerToken = req.headers.authorization?.split(' ')[1];
-  if (bearerToken) {
+  const token = bearerToken || req.query.token;
+
+  if (token) {
     try {
-      const decoded = jwt.verify(bearerToken, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET);
       return {
         ownerUserId: decoded.id,
         ownerUserName: decoded.username || decoded.name || decoded.email || '',

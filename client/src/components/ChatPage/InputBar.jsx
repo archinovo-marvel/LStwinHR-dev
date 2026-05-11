@@ -132,7 +132,7 @@ const InputWrapper = styled.div`
 
   &:focus-within {
     border-color: ${colors.highlight};
-    box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.08);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
   }
 `;
 
@@ -274,6 +274,10 @@ const InputBar = ({
   isRecording,
   startRecording,
   stopRecording,
+  voiceAnswerDraft,
+  onConfirmVoiceAnswer,
+  onKeepEditingVoiceAnswer,
+  onDismissVoiceAnswer,
   memoryEnabled,
   handleMemoryToggleChange,
   currentRounds,
@@ -298,6 +302,72 @@ const InputBar = ({
 
   return (
     <>
+      {voiceAnswerDraft?.text && voiceAnswerDraft.requiresConfirm && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          padding: '10px 12px',
+          marginBottom: 12,
+          borderRadius: 14,
+          border: '1px solid #bfdbfe',
+          background: '#eff6ff',
+        }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#1d4ed8', marginBottom: 4 }}>语音回答已转写</div>
+            <div style={{ fontSize: 13, color: '#1e3a8a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{voiceAnswerDraft.text}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={onKeepEditingVoiceAnswer}
+              style={{
+                border: '1px solid #93c5fd',
+                background: '#ffffff',
+                color: '#1d4ed8',
+                borderRadius: 10,
+                padding: '6px 10px',
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              继续编辑
+            </button>
+            <button
+              type="button"
+              onClick={onConfirmVoiceAnswer}
+              style={{
+                border: 'none',
+                background: '#2563eb',
+                color: '#ffffff',
+                borderRadius: 10,
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              提交回答
+            </button>
+            <button
+              type="button"
+              onClick={onDismissVoiceAnswer}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#64748b',
+                borderRadius: 10,
+                padding: '6px 8px',
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              稍后
+            </button>
+          </div>
+        </div>
+      )}
+
       {localEngineSelected && localVisionEnabled && attachedImages.length > 0 && (
         <AttachmentTray>
           {attachedImages.map(img => (

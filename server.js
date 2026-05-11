@@ -393,7 +393,8 @@ async function streamLocalModelResponse(res, prompt, mode = 'general', localMode
   const result = await response.json();
   const content = result?.choices?.[0]?.message?.content || '';
   if (!content) {
-    throw new Error('本地模型返回为空');
+    console.warn('[LLM] 本地模型返回空内容，使用降级回复');
+    content = '抱歉，AI服务暂时未生成有效回复，请稍后重试。';
   }
   res.write(content);
 
@@ -454,10 +455,13 @@ async function streamOllamaResponse(res, prompt, mode = 'general', preferredMode
 function buildChatSystemPrompt(mode = 'general') {
   if (mode === 'interview') {
     return [
-      '你是“招聘灵犀”的专业 AI 面试官。',
+      '你是”招聘灵犀”的专业 AI 面试官。',
       '你的目标是围绕候选人的岗位、经历和回答进行专业面试。',
       '回答要求自然、专业、简洁，不要使用 Markdown 标题。',
-      '如果输入中包含“当前面试问题”和“候选人回答”，请先评价回答，再决定是否追问或提出下一题。'
+      '重要：禁止输出任何推理过程、思考过程或分析说明。只输出最终的问题或评价。',
+      '如果需要追问，直接输出追问内容，不要加”追问：”前缀。',
+      '如果需要评价，直接输出评价内容，不要加”评价：”前缀。',
+      '如果输入中包含”当前面试问题”和”候选人回答”，请先评价回答，再决定是否追问或提出下一题。'
     ].join('\n');
   }
 
@@ -1075,7 +1079,24 @@ const { createCandidateSubmission } = require('./server/utils/candidateSubmissio
 
 const candidateRouter = createCandidateRouter({
   authMiddleware,
-  publicSubmissionMiddleware: (req, res, next) => next(),
+  publicSubmissionMiddleware: (req, res, next) => {
+    // 从查询参数或请求体中提取 token（支持二维码扫码等公开投递场景）
+    const token = req.query.token || (req.body && req.body.token);
+    if (!token) {
+      return res.status(401).json({ success: false, error: '缺少访问令牌，请通过二维码重新访问' });
+    }
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.publicSubmission = {
+        ownerUserId: decoded.id,
+        ownerUserName: decoded.username || decoded.name || decoded.email || '',
+        ownerUserEmail: decoded.email || ''
+      };
+      next();
+    } catch (error) {
+      return res.status(401).json({ success: false, error: '访问令牌无效或已过期，请通过二维码重新访问' });
+    }
+  },
   upload,
   createCandidateSubmission: ({ body, file, owner }) =>
     createCandidateSubmission({ body, file, owner, deps: { ensureDataFile, DATA_FILE } }),

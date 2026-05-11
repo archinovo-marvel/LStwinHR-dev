@@ -22,21 +22,17 @@ const calculateResumeScoreFromCandidate = (candidate) => {
 };
 
 const getRecommendationLabelFromCandidate = (candidate) => {
-  const explicitRecommendation = String(
-    candidate?.resumeAnalysisResult?.summary?.recommendation ||
-    candidate?.resumeAnalysis?.recommendation?.level ||
-    ''
-  ).trim();
-
-  if (explicitRecommendation) {
-    return explicitRecommendation;
-  }
-
+  // 综合评分 = 简历*0.4 + MBTI*0.1 + 面试*0.5
+  // 始终以综合分数计算结果为准，不再优先使用数据中存储的显式推荐标签
   const resumeScore = calculateResumeScoreFromCandidate(candidate);
-  if (resumeScore >= 75) return '强烈推荐';
-  if (resumeScore >= 60) return '推荐';
-  if (resumeScore >= 45) return '待考虑';
-  return '建议淘汰';
+  const mbtiScore = toFiniteNumber(candidate?.mbtiScore ?? candidate?.resumeAnalysisResult?.scores?.mbtiScore);
+  const interviewScore = toFiniteNumber(candidate?.interviewScore ?? candidate?.resumeAnalysisResult?.scores?.interviewScore);
+  const compositeScore = Math.round(resumeScore * 0.4 + mbtiScore * 0.1 + interviewScore * 0.5);
+
+  // 新规则：不推荐(<60)、推荐(60-79)、强烈推荐(>=80)
+  if (compositeScore >= 80) return '强烈推荐';
+  if (compositeScore >= 60) return '推荐';
+  return '不推荐';
 };
 
 const getInterviewDurationMinutes = (record) => {

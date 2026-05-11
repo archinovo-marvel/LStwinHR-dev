@@ -1,0 +1,181 @@
+<h2>Flex视觉平衡 - 详细设计</h2>
+<p class="subtitle">三个核心功能卡片布局调整方案</p>
+
+<div class="section">
+  <h3>设计目标</h3>
+  <ul>
+    <li>卡片适当拉长，弥补左侧空白</li>
+    <li>视觉平衡，非严格三等分</li>
+    <li>保持现有卡片样式和交互效果</li>
+    <li>响应式适配：桌面端水平排列，移动端垂直堆叠</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>代码改动位置</h3>
+
+  <div class="mockup">
+    <div class="mockup-header">1. HomePage.js - 第562-586行（当前结构）</div>
+    <div class="mockup-body" style="padding: 16px;">
+      <pre style="background: #f7fafc; padding: 12px; border-radius: 4px; font-size: 12px; overflow: auto;">
+// 当前代码（使用Ant Design栅格）
+&lt;Row gutter={[20, 20]}&gt;
+  {features.map((feature, index) =&gt; (
+    &lt;Col xs={24} sm={12} lg={6} key={index}&gt;
+      &lt;motion.div&gt;
+        &lt;FeatureCard&gt;...&lt;/FeatureCard&gt;
+      &lt;/motion.div&gt;
+    &lt;/Col&gt;
+  ))}
+&lt;/Row&gt;</pre>
+      <p class="label">问题：每卡片6列，三卡片共18列，左侧留6列空白</p>
+    </div>
+  </div>
+
+  <div class="mockup" style="margin-top: 16px; border-color: #2F80ED;">
+    <div class="mockup-header">2. 新设计（Flex容器替换）</div>
+    <div class="mockup-body" style="padding: 16px;">
+      <pre style="background: #e8f2ff; padding: 12px; border-radius: 4px; font-size: 12px; overflow: auto;">
+// 移除Row/Col，添加CSS类名
+&lt;div className="features-flex-container"&gt;
+  {features.map((feature, index) =&gt; (
+    &lt;motion.div
+      className="feature-flex-item"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.1 }}
+      key={index}
+    &gt;
+      &lt;FeatureCard ... /&gt;
+    &lt;/motion.div&gt;
+  ))}
+&lt;/div&gt;</pre>
+    </div>
+  </div>
+
+  <div class="mockup" style="margin-top: 16px;">
+    <div class="mockup-header">3. CSS样式（添加到FeaturesSection styled component后）</div>
+    <div class="mockup-body" style="padding: 16px;">
+      <pre style="background: #f7fafc; padding: 12px; border-radius: 4px; font-size: 12px; overflow: auto;">
+// Flex容器样式
+const FeaturesFlexContainer = styled.div`
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 16px;
+  }
+`;
+
+// Flex项目样式
+const FeatureFlexItem = styled.div`
+  flex: 1 1 30%; /* 基础30%，可拉伸填充 */
+  min-width: 280px;
+  max-width: 380px;
+
+  @media (max-width: 992px) {
+    flex: 1 1 45%;
+    max-width: none;
+  }
+
+  @media (max-width: 768px) {
+    flex: 1 1 100%;
+    min-width: auto;
+  }
+`;</pre>
+      <p class="label">关键：flex: 1 1 30% 提供弹性，视觉平衡非等分</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>响应式断点设计</h3>
+  <div class="cards">
+    <div class="card">
+      <div class="card-body">
+        <h4>桌面端（≥992px）</h4>
+        <p>三卡片水平排列，flex: 1 1 30%，最大宽度380px，间距20px</p>
+        <div style="display: flex; gap: 10px; margin-top: 12px;">
+          <div style="flex: 1 1 30%; background: #E8F2FF; padding: 8px; border-radius: 6px; text-align: center;">卡片1</div>
+          <div style="flex: 1 1 30%; background: #D1FAE5; padding: 8px; border-radius: 6px; text-align: center;">卡片2</div>
+          <div style="flex: 1 1 30%; background: #EDE9FE; padding: 8px; border-radius: 6px; text-align: center;">卡片3</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h4>平板端（768-991px）</h4>
+        <p>两行布局：前两卡片一行，第三卡片独占一行</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+          <div style="flex: 1 1 45%; background: #E8F2FF; padding: 8px; border-radius: 6px; text-align: center;">卡片1</div>
+          <div style="flex: 1 1 45%; background: #D1FAE5; padding: 8px; border-radius: 6px; text-align: center;">卡片2</div>
+          <div style="flex: 1 1 100%; background: #EDE9FE; padding: 8px; border-radius: 6px; text-align: center; margin-top: 10px;">卡片3</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h4>移动端（<768px）</h4>
+        <p>垂直堆叠，每卡片占100%宽度</p>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+          <div style="background: #E8F2FF; padding: 8px; border-radius: 6px; text-align: center;">卡片1</div>
+          <div style="background: #D1FAE5; padding: 8px; border-radius: 6px; text-align: center;">卡片2</div>
+          <div style="background: #EDE9FE; padding: 8px; border-radius: 6px; text-align: center;">卡片3</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>视觉对比效果</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">修改前（左侧空白）</div>
+      <div class="mockup-body" style="padding: 16px;">
+        <div style="display: flex; gap: 20px; background: #F7F9FC; padding: 20px; border-radius: 8px;">
+          <div style="flex: 0 0 25%; background: #E8F2FF; padding: 16px; border-radius: 12px;">简历初筛</div>
+          <div style="flex: 0 0 25%; background: #D1FAE5; padding: 16px; border-radius: 12px;">候选管理</div>
+          <div style="flex: 0 0 25%; background: #EDE9FE; padding: 16px; border-radius: 12px;">面试访谈</div>
+          <div style="flex: 1; border: 2px dashed #94A3B8; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #94A3B8;">空白区域</div>
+        </div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">修改后（视觉平衡）</div>
+      <div class="mockup-body" style="padding: 16px;">
+        <div style="display: flex; gap: 20px; background: #F7F9FC; padding: 20px; border-radius: 8px;">
+          <div style="flex: 1.2; background: #E8F2FF; padding: 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">简历初筛</div>
+          <div style="flex: 1.2; background: #D1FAE5; padding: 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">候选管理</div>
+          <div style="flex: 1.2; background: #EDE9FE; padding: 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">面试访谈</div>
+        </div>
+        <p style="font-size: 12px; color: #666; margin-top: 8px; text-align: center;">卡片适当拉长，视觉平衡，无空白</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="background: #F0F7FF; padding: 20px; border-radius: 12px; margin-top: 24px;">
+  <h3>设计确认</h3>
+  <p>此设计是否满足"适当拉长，弥补左边空白，视觉平衡"的要求？</p>
+
+  <div class="options" style="margin-top: 16px;">
+    <div class="option" data-choice="approve-design" onclick="toggleSelect(this)">
+      <div class="letter">✓</div>
+      <div class="content">
+        <h3>批准设计</h3>
+        <p>设计符合要求，可进入实施阶段。</p>
+      </div>
+    </div>
+    <div class="option" data-choice="need-adjustments" onclick="toggleSelect(this)">
+      <div class="letter">✎</div>
+      <div class="content">
+        <h3>需要调整</h3>
+        <p>需修改某些方面（请说明）。</p>
+      </div>
+    </div>
+  </div>
+</div>

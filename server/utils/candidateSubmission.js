@@ -1,14 +1,13 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
-const fsSync = require('fs');
 const crypto = require('crypto');
+const { loadUploadedFileBuffer, cleanupUploadedFile } = require('./uploadStorage');
 
 let Jimp;
 try { Jimp = require('jimp'); } catch (e) { /* Jimp not available */ }
 
-const { generateCandidateId } = require('../../db');
-const { ensureCandidateDatabase, upsertCandidateForUser } = require('../../services/candidateStore');
+const { ensureCandidateDatabase, upsertCandidateForUser, generateCandidateId } = require('../../services/candidateStore');
 const { scheduleResumeAnalysis } = require('../services/resumeAnalysis');
 
 function sanitizeFileNamePart(value, fallback = '未命名') {
@@ -21,6 +20,31 @@ function buildUploadedResumeFileName(name, position, mbti, ext) {
   const safePosition = sanitizeFileNamePart(position, '未定岗位');
   const safeMbti = sanitizeFileNamePart(mbti, '未测MBTI');
   return `${safeName}_${safePosition}_${safeMbti}${ext}`;
+}
+
+async function writeResumeBufferSafely(uploadDir, requestedFileName, fileExt, buffer) {
+  await fs.promises.mkdir(uploadDir, { recursive: true });
+
+  const baseName = path.basename(requestedFileName, fileExt);
+  let nextFileName = requestedFileName;
+
+  while (true) {
+    const nextFilePath = path.join(uploadDir, nextFileName);
+    try {
+      await fs.promises.writeFile(nextFilePath, buffer, { flag: 'wx' });
+      return {
+        resumeFileName: nextFileName,
+        resumeFilePath: nextFilePath
+      };
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        throw error;
+      }
+
+      const uniqueSuffix = `${Date.now()}_${Math.round(Math.random() * 1E6)}`;
+      nextFileName = `${baseName}_${uniqueSuffix}${fileExt}`;
+    }
+  }
 }
 
 function getJimpReader() {
@@ -109,61 +133,58 @@ async function createCandidateSubmission({ body, file, owner, deps }) {
   await ensureDataFile();
 
   let resumeFilePath = null, resumeFileName = null;
+  let finalResumeBuffer = null;
 
-  if (file) {
-    try {
+  try {
+    if (file) {
+      const uploadedBuffer = await loadUploadedFileBuffer(file);
       const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'resumes');
-      if (!fsSync.existsSync(uploadDir)) fsSync.mkdirSync(uploadDir, { recursive: true });
       const fileExt = path.extname(file.originalname).toLowerCase();
-      resumeFileName = buildUploadedResumeFileName(body.name, body.position, body.mbti, fileExt);
-      resumeFilePath = path.join(uploadDir, resumeFileName);
-      const processedUpload = await compressImageBufferIfNeeded(file.buffer, fileExt);
-      if (fsSync.existsSync(resumeFilePath)) {
-        const uniqueSuffix = `${Date.now()}_${Math.round(Math.random() * 1E6)}`;
-        const baseName = path.basename(resumeFileName, fileExt);
-        resumeFileName = `${baseName}_${uniqueSuffix}${fileExt}`;
-        resumeFilePath = path.join(uploadDir, resumeFileName);
-      }
-      await fs.promises.writeFile(resumeFilePath, processedUpload.buffer);
-    } catch (error) {
-      console.error('保存文件失败:', error);
+      const requestedFileName = buildUploadedResumeFileName(body.name, body.position, body.mbti, fileExt);
+      const processedUpload = await compressImageBufferIfNeeded(uploadedBuffer, fileExt);
+      finalResumeBuffer = processedUpload.buffer;
+      const writtenResume = await writeResumeBufferSafely(uploadDir, requestedFileName, fileExt, finalResumeBuffer);
+      resumeFileName = writtenResume.resumeFileName;
+      resumeFilePath = writtenResume.resumeFilePath;
     }
+
+    const provisionalScores = calculateCandidateScores(body, null);
+    const newCandidate = {
+      ...body,
+      id: generateCandidateId(),
+      ownerUserId: owner.id,
+      ownerUserName: owner.username || owner.email || '',
+      ownerUserEmail: owner.email || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      resumeFilePath,
+      resumeOriginalName: file ? file.originalname : null,
+      resumeFileName,
+      matchScore: provisionalScores.finalMatchScore,
+      mbtiScore: provisionalScores.mbtiScore,
+      resumeScore: provisionalScores.resumeScore,
+      resumeAnalysis: file ? createPendingResumeAnalysis() : null,
+      recommendation: file ? '简历分析排队中，请稍候查看结果' : '建议进一步评估',
+      hasInterview: false,
+      status: file ? '分析中' : '已提交'
+    };
+
+    if (newCandidate.resumeFilePath) {
+      try {
+        const stats = await fs.promises.stat(newCandidate.resumeFilePath);
+        newCandidate.resumeSize = String(stats.size);
+        newCandidate.resumeFileHash = await calculateFileHash(newCandidate.resumeFilePath);
+      } catch (error) { /* ignore */ }
+    }
+
+    if (finalResumeBuffer) newCandidate.resumeFileBuffer = finalResumeBuffer;
+    await upsertCandidateForUser(owner.id, newCandidate);
+    if (file) scheduleResumeAnalysis(newCandidate.id, { renameAfterAnalysis: true });
+
+    return newCandidate;
+  } finally {
+    await cleanupUploadedFile(file);
   }
-
-  const provisionalScores = calculateCandidateScores(body, null);
-  const newCandidate = {
-    ...body,
-    id: generateCandidateId(),
-    ownerUserId: owner.id,
-    ownerUserName: owner.username || owner.email || '',
-    ownerUserEmail: owner.email || '',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    resumeFilePath,
-    resumeOriginalName: file ? file.originalname : null,
-    resumeFileName,
-    matchScore: provisionalScores.finalMatchScore,
-    mbtiScore: provisionalScores.mbtiScore,
-    resumeScore: provisionalScores.resumeScore,
-    resumeAnalysis: file ? createPendingResumeAnalysis() : null,
-    recommendation: file ? '简历分析排队中，请稍候查看结果' : '建议进一步评估',
-    hasInterview: false,
-    status: file ? '分析中' : '已提交'
-  };
-
-  if (newCandidate.resumeFilePath && fsSync.existsSync(newCandidate.resumeFilePath)) {
-    try {
-      const stats = await fs.promises.stat(newCandidate.resumeFilePath);
-      newCandidate.resumeSize = String(stats.size);
-      newCandidate.resumeFileHash = await calculateFileHash(newCandidate.resumeFilePath);
-    } catch (error) { /* ignore */ }
-  }
-
-  if (file) newCandidate.resumeFileBuffer = file.buffer;
-  await upsertCandidateForUser(owner.id, newCandidate);
-  if (file) scheduleResumeAnalysis(newCandidate.id, { renameAfterAnalysis: true });
-
-  return newCandidate;
 }
 
 module.exports = { createCandidateSubmission };

@@ -37,8 +37,22 @@ class InterviewStorage {
     return this.startInterviewSession(candidateId, candidateName, position);
   }
 
+  // 将一个会话归档到历史（不清除currentSession，保留status）
+  archiveSession(session) {
+    if (!session) return;
+    session.endTime = new Date().toISOString();
+    session.status = 'completed';
+    this.saveToHistory(session);
+  }
+
   // 开始新的面试会话
   startInterviewSession(candidateId, candidateName, position) {
+    // Archive any in-progress session first so no data is lost
+    const existing = this.getCurrentSession();
+    if (existing && existing.status === 'in_progress') {
+      this.archiveSession(existing);
+    }
+
     const session = {
       id: Date.now(),
       candidateId: candidateId,
@@ -102,7 +116,10 @@ class InterviewStorage {
       timestamp: new Date().toISOString(),
       order: session.conversation.candidateAnswers.length + 1,
       length: answer.length,
-      wordCount: this.countWords(answer)
+      wordCount: this.countWords(answer),
+      // 实时评分（AI打分后填充）
+      realTimeScore: null,   // { relevance, depth, clarity, professionalism }
+      realTimeComment: null // string
     };
 
     session.conversation.candidateAnswers.push(answerData);
@@ -116,6 +133,18 @@ class InterviewStorage {
     session.metadata.totalAnswers = session.conversation.candidateAnswers.length;
     session.metadata.averageAnswerLength = this.calculateAverageAnswerLength(session.conversation.candidateAnswers);
 
+    this.updateCurrentSession(session);
+    return true;
+  }
+
+  // 根据 answerId 更新回答的实时评分（由 AI 评分后调用）
+  updateAnswerRealTimeScore(answerId, realTimeScore, realTimeComment) {
+    const session = this.getCurrentSession();
+    if (!session) return false;
+    const answer = session.conversation.candidateAnswers.find(a => a.id === answerId);
+    if (!answer) return false;
+    answer.realTimeScore = realTimeScore;
+    answer.realTimeComment = realTimeComment;
     this.updateCurrentSession(session);
     return true;
   }
@@ -182,6 +211,11 @@ class InterviewStorage {
     localStorage.removeItem(this.currentSessionKey);
 
     return session;
+  }
+
+  // P3: 安全清除当前会话（替代直接操作 localStorage）
+  clearCurrentSession() {
+    localStorage.removeItem(this.currentSessionKey);
   }
 
   // 获取当前面试会话

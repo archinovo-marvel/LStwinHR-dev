@@ -12,7 +12,13 @@ class RealTimeSync {
 
   // 生成数据哈希值，用于检测数据变化
   generateDataHash(data) {
-    return btoa(JSON.stringify(data)).slice(0, 16);
+    const str = JSON.stringify(data);
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+      hash |= 0;
+    }
+    return (hash >>> 0).toString(36);
   }
 
   // 保存数据到共享存储（使用localStorage，因为sessionStorage不能跨设备）

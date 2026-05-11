@@ -199,6 +199,64 @@ async function waitForServiceReady(url, timeoutMs = 240000, intervalMs = 3000) {
   throw new Error(`等待服务就绪超时: ${url}${lastError ? ` (${lastError})` : ''}`);
 }
 
+async function ensureModelReady(localModelUrl, localModelName, timeoutMs = 600000, intervalMs = 5000) {
+  const startedAt = Date.now();
+  let lastError = '';
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const response = await fetch(`${localModelUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: localModelName,
+          stream: false,
+          max_tokens: 1,
+          temperature: 0,
+          messages: [{ role: 'user', content: 'ping' }]
+        })
+      });
+      if (response.ok) {
+        return true;
+      }
+      if (response.status === 503) {
+        const errorText = await response.text().catch(() => '');
+        if (errorText.includes('Loading model') || errorText.includes('loading')) {
+          console.log(`[LLM] 模型仍在加载中，等待 ${intervalMs / 1000}s 后重试...`);
+          lastError = 'Loading model';
+        } else {
+          lastError = `HTTP ${response.status}: ${errorText}`;
+        }
+      } else {
+        lastError = `HTTP ${response.status}`;
+      }
+    } catch (error) {
+      lastError = error.message;
+    }
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`模型就绪等待超时(${timeoutMs / 1000}s): ${lastError}`);
+}
+
+async function retryOnLoadingModel(fn, maxRetries = 5, baseDelayMs = 5000) {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const message = error.message || '';
+      if (message.includes('Loading model') || message.includes('loading') || message.includes('503')) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        console.log(`[LLM] 模型加载中，${delay / 1000}s 后重试(第${attempt + 1}/${maxRetries}次)...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 async function runDockerCommand(args, timeout = 180000) {
   const result = await execFileAsync('docker', args, { timeout, maxBuffer: 1024 * 1024 * 10 });
   return {
@@ -271,6 +329,9 @@ function buildChatSystemPrompt(mode = 'general') {
       '你是"招聘灵犀"的专业 AI 面试官。',
       '你的目标是围绕候选人的岗位、经历和回答进行专业面试。',
       '回答要求自然、专业、简洁，不要使用 Markdown 标题。',
+      '重要：禁止输出任何推理过程、思考过程或分析说明。只输出最终的问题或评价。',
+      '如果需要追问，直接输出追问内容，不要加"追问："前缀。',
+      '如果需要评价，直接输出评价内容，不要加"评价："前缀。',
       '如果输入中包含"当前面试问题"和"候选人回答"，请先评价回答，再决定是否追问或提出下一题。'
     ].join('\n');
   }
@@ -304,21 +365,28 @@ async function streamLocalModelResponse(res, prompt, mode = 'general', localMode
       ]
     : prompt;
 
+  await ensureModelReady(localModel.url, localModel.model);
+
   await withAIConcurrencyLimit('local', async () => {
-    const response = await fetch(`${localModel.url}/v1/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: localModel.model,
-        stream: false,
-        max_tokens: mode === 'interview' ? 384 : 512,
-        temperature: mode === 'interview' ? 0.2 : 0.3,
-        messages: [
-          { role: 'system', content: buildChatSystemPrompt(mode) },
-          { role: 'user', content: userContent }
-        ]
+    const response = await retryOnLoadingModel(() =>
+      fetch(`${localModel.url}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: localModel.model,
+          stream: false,
+          max_tokens: mode === 'interview' ? 1024 : 512,
+          temperature: mode === 'interview' ? 0.5 : 0.6,
+          top_p: 0.9,
+          frequency_penalty: 0.3,
+          presence_penalty: 0.1,
+          stop: ["\n\n\n"],
+          messages: [
+            { role: 'user', content: userContent }
+          ]
+        })
       })
-    });
+    );
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
@@ -326,9 +394,9 @@ async function streamLocalModelResponse(res, prompt, mode = 'general', localMode
     }
 
     const result = await response.json();
-    const content = result?.choices?.[0]?.message?.content || '';
+    const content = result?.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error('本地模型返回为空');
+      throw new Error('本地模型返回空内容，请重试');
     }
     res.write(content);
   });

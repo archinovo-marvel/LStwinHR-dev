@@ -1,29 +1,29 @@
 'use strict';
 
-const IORedis = require('ioredis');
-
 require('dotenv').config();
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://redis:6379';
 const STORE_MODE = process.env.VERIFICATION_CODE_STORE || 'redis';
 const KEY_PREFIX = process.env.VERIFICATION_CODE_PREFIX || 'verification-code';
 
-function buildKey(email) {
-  return `${KEY_PREFIX}:${String(email || '').trim().toLowerCase()}`;
-}
-
 function createMemoryStore() {
   const store = new Map();
   return {
     async get(email) {
-      return store.get(buildKey(email)) || null;
+      const entry = store.get(`${KEY_PREFIX}:${String(email || '').trim().toLowerCase()}`);
+      if (!entry) return null;
+      if (Date.now() > entry.expiry) {
+        store.delete(`${KEY_PREFIX}:${String(email || '').trim().toLowerCase()}`);
+        return null;
+      }
+      return entry;
     },
     async set(email, value) {
-      store.set(buildKey(email), value);
+      store.set(`${KEY_PREFIX}:${String(email || '').trim().toLowerCase()}`, value);
       return true;
     },
     async delete(email) {
-      store.delete(buildKey(email));
+      store.delete(`${KEY_PREFIX}:${String(email || '').trim().toLowerCase()}`);
       return true;
     },
     async close() {
@@ -37,6 +37,14 @@ function createVerificationCodeStore() {
 
   if (STORE_MODE === 'memory') {
     console.warn('[verification-code-store] 当前使用内存存储，验证码在多实例下不会共享');
+    return fallbackStore;
+  }
+
+  let IORedis;
+  try {
+    IORedis = require('ioredis');
+  } catch (e) {
+    console.warn('[verification-code-store] ioredis未安装，回退到内存存储');
     return fallbackStore;
   }
 
@@ -76,6 +84,10 @@ function createVerificationCodeStore() {
     }
   }
 
+  function buildKey(email) {
+    return `${KEY_PREFIX}:${String(email || '').trim().toLowerCase()}`;
+  }
+
   return {
     async get(email) {
       const client = await getRedisClient();
@@ -102,7 +114,8 @@ function createVerificationCodeStore() {
       }
 
       const ttlMs = Math.max(1000, Number(value?.expiry || 0) - Date.now());
-      await client.set(buildKey(email), JSON.stringify(value), 'PX', ttlMs);
+      const ttlSec = Math.max(1, Math.ceil(ttlMs / 1000));
+      await client.set(buildKey(email), JSON.stringify(value), 'EX', ttlSec);
       return true;
     },
     async delete(email) {

@@ -200,58 +200,32 @@ export class PlayerManager {
    * @param {HTMLVideoElement} video - 视频元素
    */
   setupVideoEvents(video) {
-    video.addEventListener('loadstart', () => {
-      console.log('视频开始加载');
-      this.emit('loadstart');
-    });
+    this._videoElement = video;
+    this._videoListeners = {
+      loadstart: () => { console.log('视频开始加载'); this.emit('loadstart'); },
+      loadeddata: () => { console.log('视频数据加载完成'); this.emit('loadeddata'); },
+      canplay: () => { console.log('视频可以播放'); this.emit('canplay'); },
+      play: () => { console.log('视频开始播放'); this.isPlaying = true; this.emit('play'); },
+      playing: () => { console.log('视频正在播放'); this.emit('playing'); },
+      pause: () => { console.log('视频暂停'); this.isPlaying = false; this.emit('pause'); },
+      ended: () => { console.log('视频播放结束'); this.isPlaying = false; this.emit('ended'); },
+      error: (error) => { console.error('视频播放错误:', error); this.emit('error', error); },
+      waiting: () => { console.log('视频缓冲中'); this.emit('waiting'); },
+      stalled: () => { console.log('视频停滞'); this.emit('stalled'); }
+    };
+    for (const [event, handler] of Object.entries(this._videoListeners)) {
+      video.addEventListener(event, handler);
+    }
+  }
 
-    video.addEventListener('loadeddata', () => {
-      console.log('视频数据加载完成');
-      this.emit('loadeddata');
-    });
-
-    video.addEventListener('canplay', () => {
-      console.log('视频可以播放');
-      this.emit('canplay');
-    });
-
-    video.addEventListener('play', () => {
-      console.log('视频开始播放');
-      this.isPlaying = true;
-      this.emit('play');
-    });
-
-    video.addEventListener('playing', () => {
-      console.log('视频正在播放');
-      this.emit('playing');
-    });
-
-    video.addEventListener('pause', () => {
-      console.log('视频暂停');
-      this.isPlaying = false;
-      this.emit('pause');
-    });
-
-    video.addEventListener('ended', () => {
-      console.log('视频播放结束');
-      this.isPlaying = false;
-      this.emit('ended');
-    });
-
-    video.addEventListener('error', (error) => {
-      console.error('视频播放错误:', error);
-      this.emit('error', error);
-    });
-
-    video.addEventListener('waiting', () => {
-      console.log('视频缓冲中');
-      this.emit('waiting');
-    });
-
-    video.addEventListener('stalled', () => {
-      console.log('视频停滞');
-      this.emit('stalled');
-    });
+  teardownVideoEvents() {
+    if (this._videoElement && this._videoListeners) {
+      for (const [event, handler] of Object.entries(this._videoListeners)) {
+        this._videoElement.removeEventListener(event, handler);
+      }
+      this._videoListeners = null;
+      this._videoElement = null;
+    }
   }
 
   /**
@@ -379,6 +353,13 @@ export class PlayerManager {
    * 销毁播放器
    */
   destroy() {
+    this.teardownVideoEvents();
+    if (this._audioResumeListener) {
+      document.removeEventListener('click', this._audioResumeListener);
+      document.removeEventListener('keydown', this._audioResumeListener);
+      document.removeEventListener('touchstart', this._audioResumeListener);
+      this._audioResumeListener = null;
+    }
     if (this.player) {
       this.stop();
       if (this.player.parentNode) {

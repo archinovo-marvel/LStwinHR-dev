@@ -8,29 +8,14 @@ const RESUME_SCORE_DIMENSIONS = {
 };
 
 const FINAL_SCORE_WEIGHTS = {
-  resumeScore: 0.35,
-  mbtiScore: 0.15,
+  resumeScore: 0.4,
+  mbtiScore: 0.1,
   interviewScore: 0.5
 };
 
-const MBTI_SCORE_MAP = {
-  ENTJ: 90,
-  INTJ: 88,
-  ENTP: 85,
-  INTP: 82,
-  ENFJ: 85,
-  INFJ: 88,
-  ENFP: 80,
-  INFP: 78,
-  ESTJ: 88,
-  ISTJ: 85,
-  ESTP: 82,
-  ISTP: 80,
-  ESFJ: 85,
-  ISFJ: 82,
-  ESFP: 78,
-  ISFP: 75
-};
+// MBTI评分不再使用预设映射表，改为AI基于岗位匹配度打分
+// 保留 MBTI_SCORE_MAP 作为导出空对象，避免其他模块引用报错
+const MBTI_SCORE_MAP = {};
 
 const ANALYSIS_FALLBACKS = {
   emptyResume: '暂未识别到有效简历内容',

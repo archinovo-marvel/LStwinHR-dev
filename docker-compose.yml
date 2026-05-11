@@ -21,10 +21,9 @@ services:
       - --ctx-size
       - "32768"
       - --parallel
-      - "1"
+      - "${LOCAL_LLM_VL_PARALLEL:-1}"
       - --gpu-layers
       - "99"
-      - --no-warmup
       - --alias
       - qwen3.5-9b-vlm-gguf
     healthcheck:
@@ -46,7 +45,7 @@ services:
 
   mysql:
     image: mysql:8.0
-    command: --default-authentication-plugin=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     ports:
       - "3307:3306"
     environment:
@@ -57,6 +56,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
+      - ./mysql.cnf:/etc/mysql/conf.d/mysql.cnf:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uuser", "-ppassword"]
       interval: 10s
@@ -75,16 +75,23 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
+      - REDIS_URL=redis://redis:6379
+      - RESUME_ANALYSIS_USE_QUEUE=true
+      - RESUME_ANALYSIS_WORKER_CONCURRENCY=${RESUME_ANALYSIS_WORKER_CONCURRENCY:-1}
       - AUTHHUB_URL=http://host.docker.internal:5000
       - AUTHUB_WEBHOOK_SECRET=your-secret
       - DATABASE_URL=mongodb://admin:password@mongodb:27017/ai_hr_db?authSource=admin
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=qwen3.5:9b
+      - OLLAMA_AI_MAX_CONCURRENCY=${OLLAMA_AI_MAX_CONCURRENCY:-2}
+      - OLLAMA_AI_MAX_QUEUE=${OLLAMA_AI_MAX_QUEUE:-12}
       - LOCAL_LLM_ENABLED=true
       - LOCAL_LLM_URL=http://local-llm-vl:8000
       - LOCAL_LLM_MODEL=qwen3.5-9b-vlm-gguf
       - LOCAL_LLM_VL_URL=http://local-llm-vl:8000
       - LOCAL_LLM_VL_MODEL=qwen3.5-9b-vlm-gguf
+      - LOCAL_AI_MAX_CONCURRENCY=${LOCAL_AI_MAX_CONCURRENCY:-1}
+      - LOCAL_AI_MAX_QUEUE=${LOCAL_AI_MAX_QUEUE:-8}
       - DOCKER_CONTROL_ENABLED=true
       - OLLAMA_CONTAINER_NAME=lstwinhr-dev_v001-ollama-1
       - LOCAL_LLM_VL_CONTAINER_NAME=lstwinhr-dev_v003-local-llm-vl-1
@@ -103,6 +110,8 @@ services:
       - DB_USER=user
       - DB_PASSWORD=password
       - DB_NAME=luanshu-authhub
+      - DB_ROOT_USER=root
+      - DB_ROOT_PASSWORD=rootpassword
       - JWT_SECRET=your_jwt_secret_change_this_in_production
       # 讯飞虚拟人配置
       - XUNFEI_APP_ID=${XUNFEI_APP_ID}
@@ -130,10 +139,53 @@ services:
         condition: service_healthy
       local-llm-vl:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
     networks:
       - ai-hr-network
     command: ["nodemon", "--ignore", "users.json", "--ignore", "candidate-data.json", "--ignore", "public/*", "server.js"]
+
+  ai-hr-resume-worker:
+    build: .
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      - RESUME_ANALYSIS_USE_QUEUE=false
+      - RESUME_ANALYSIS_WORKER_CONCURRENCY=${RESUME_ANALYSIS_WORKER_CONCURRENCY:-1}
+      - LOCAL_LLM_ENABLED=true
+      - LOCAL_LLM_URL=http://local-llm-vl:8000
+      - LOCAL_LLM_MODEL=qwen3.5-9b-vlm-gguf
+      - LOCAL_LLM_VL_URL=http://local-llm-vl:8000
+      - LOCAL_LLM_VL_MODEL=qwen3.5-9b-vlm-gguf
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=luanshu-authhub
+      - DB_ROOT_USER=root
+      - DB_ROOT_PASSWORD=rootpassword
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - LOCAL_VL_ANALYSIS_TIMEOUT_MS=120000
+      - SCANNED_PDF_LOCAL_VL_ANALYSIS_TIMEOUT_MS=180000
+      - DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS=90000
+    volumes:
+      - ./uploads:/app/uploads
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+      local-llm-vl:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ai-hr-network
+    command: ["nodemon", "resume-analysis-worker.js"]
 
   # 前端应用
   ai-hr-frontend:
@@ -142,6 +194,7 @@ services:
       - "3006:3000"
     environment:
       - REACT_APP_API_URL=http://ai-hr-backend:3001
+      - REACT_APP_PUBLIC_BASE_URL=https://1154083nrki65.vicp.fun
       - REACT_APP_VIRTUAL_HUMAN_ENABLED=${REACT_APP_VIRTUAL_HUMAN_ENABLED:-true}
       - REACT_APP_XUNFEI_APP_ID=${XUNFEI_APP_ID}
       - REACT_APP_XUNFEI_API_KEY=${XUNFEI_API_KEY}

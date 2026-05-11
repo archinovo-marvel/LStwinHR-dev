@@ -1,62 +1,36 @@
-/* 修复 Ant Design 的 -ms-high-contrast 弃用警告 */
-/* 使用新的 Forced Colors Mode 标准 */
+/* Ant Design 全局样式修复 - Blue White Premium Tech */
 
-/* 覆盖 Ant Design 的高对比度样式 */
+/* 高对比度模式适配 */
 @media (prefers-contrast: high) {
-  .ant-list-item {
-    border-color: ButtonText;
-  }
-
-  .ant-card {
-    border-color: ButtonText;
-  }
-
-  .ant-btn {
-    border-color: ButtonText;
-  }
-
-  .ant-input {
+  .ant-list-item, .ant-card, .ant-btn, .ant-input {
     border-color: ButtonText;
   }
 }
 
-/* 使用新的 forced-colors 媒体查询 */
 @media (forced-colors: active) {
-  .ant-list-item {
-    border-color: ButtonText;
-  }
-
-  .ant-card {
-    border-color: ButtonText;
-  }
-
-  .ant-btn {
-    border-color: ButtonText;
-  }
-
-  .ant-input {
+  .ant-list-item, .ant-card, .ant-btn, .ant-input {
     border-color: ButtonText;
   }
 }
 
-/* Ant Design Modal 全局样式 - 匹配站点UI风格 */
+/* Modal */
 .ant-modal-content {
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 0;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 24px 64px rgba(15,23,42,0.12);
 }
 
 .ant-modal-header {
-  border-radius: 16px 16px 0 0;
+  border-radius: 20px 20px 0 0;
   padding: 24px 28px 20px;
-  border-bottom: 1px solid #D4E3ED;
+  border-bottom: 1px solid #E2E8F0;
 }
 
 .ant-modal-title {
-  font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: 20px;
-  font-weight: 400;
-  color: #1A2A3A;
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #0F172A;
 }
 
 .ant-modal-body {
@@ -64,21 +38,21 @@
 }
 
 .ant-modal-footer {
-  border-top: 1px solid #D4E3ED;
+  border-top: 1px solid #E2E8F0;
   padding: 16px 28px 24px;
   margin-top: 0;
 }
 
 .ant-modal-close-x {
-  color: #6B7C8D;
+  color: #64748B;
   font-size: 18px;
 }
 
-/* Ant Design Confirm Modal 全局样式 */
+/* Confirm Modal */
 .ant-modal-confirm .ant-modal-content {
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 0;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 24px 64px rgba(15,23,42,0.15);
 }
 
 .ant-modal-confirm .ant-modal-body {
@@ -86,23 +60,24 @@
 }
 
 .ant-modal-confirm-title {
-  font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: 20px;
-  font-weight: 400;
-  color: #1A2A3A;
+  font-size: 18px;
+  font-weight: 600;
+  color: #0F172A;
 }
 
 .ant-modal-confirm-content {
   font-size: 14px;
-  color: #6B7C8D;
+  color: #64748B;
   line-height: 1.7;
   margin-top: 12px;
 }
 
+/* Danger Button */
 .ant-btn-dangerous {
   background: #FFFFFF;
   border-color: #EF4444;
   color: #EF4444;
+  border-radius: 10px;
 }
 
 .ant-btn-dangerous:hover {
@@ -111,10 +86,11 @@
   color: #FFFFFF !important;
 }
 
-/* Ant Design Select 下拉样式 */
+/* Select Dropdown */
 .ant-select-dropdown {
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 40px rgba(15,23,42,0.1) !important;
+  border: 1px solid #E2E8F0;
 }
 
 .ant-select-item {
@@ -123,51 +99,123 @@
 }
 
 .ant-select-item-option-selected {
-  background: #E8F4FA !important;
+  background: #EFF6FF !important;
+  color: #2563EB !important;
+  font-weight: 500;
 }
 
-/* Ant Design Input 样式 */
-.ant-input {
-  border-radius: 10px;
+.ant-select-item-option-active {
+  background: #F8FAFC !important;
 }
 
-.ant-input:hover,
-.ant-input:focus {
-  border-color: #4A9ECF;
-  box-shadow: 0 0 0 3px rgba(74, 158, 207, 0.1);
+/* Input — 由 App.css 全局处理 */
+/* Select — 由 App.css 全局处理 */
+/* DatePicker — 由 App.css 全局处理 */
+
+/* Button — 由 App.css 全局处理 */
+
+/* Pagination */
+.ant-pagination-item-active {
+  border-color: #2563EB !important;
 }
 
-/* Ant Design Select 样式 */
-.ant-select-selector {
-  border-radius: 10px !important;
+.ant-pagination-item-active a {
+  color: #2563EB !important;
 }
 
-.ant-select:not(.ant-select-disabled):hover .ant-select-selector {
-  border-color: #4A9ECF;
+/* Checkbox */
+.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: #2563EB !important;
+  border-color: #2563EB !important;
+  border-radius: 4px !important;
 }
 
-/* Ant Design DatePicker 样式 */
-.ant-picker {
-  border-radius: 10px;
+.ant-checkbox-wrapper:hover .ant-checkbox-inner,
+.ant-checkbox:hover .ant-checkbox-inner {
+  border-color: #2563EB !important;
 }
 
-.ant-picker:hover {
-  border-color: #4A9ECF;
+/* Radio */
+.ant-radio-checked .ant-radio-inner {
+  border-color: #2563EB !important;
+  background-color: #2563EB !important;
 }
 
-/* Ant Design Button 样式 */
-.ant-btn-primary {
-  background: #4A9ECF;
-  border-color: #4A9ECF;
-  box-shadow: none;
+/* Tooltip */
+.ant-tooltip-inner {
+  border-radius: 8px !important;
+  font-size: 12px !important;
 }
 
-.ant-btn-primary:hover {
-  background: #3A8DC4 !important;
-  border-color: #3A8DC4 !important;
+/* Popover */
+.ant-popover-inner {
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(15,23,42,0.1) !important;
 }
 
-.ant-btn-default:hover {
-  color: #4A9ECF;
-  border-color: #4A9ECF;
+/* Badge */
+.ant-badge-status-processing {
+  background-color: #2563EB !important;
+}
+
+.ant-badge-status-processing::after {
+  border-color: #2563EB !important;
+}
+
+/* Steps */
+.ant-steps-item-process .ant-steps-item-icon {
+  background: #2563EB !important;
+  border-color: #2563EB !important;
+}
+
+.ant-steps-item-finish .ant-steps-item-icon {
+  border-color: #2563EB !important;
+}
+
+.ant-steps-item-finish .ant-steps-item-icon > .ant-steps-icon {
+  color: #2563EB !important;
+}
+
+.ant-steps-item-finish > .ant-steps-item-container > .ant-steps-item-tail::after {
+  background-color: #2563EB !important;
+}
+
+/* Slider */
+.ant-slider-track {
+  background: #2563EB !important;
+}
+
+.ant-slider-handle::after {
+  box-shadow: 0 0 0 2px #2563EB !important;
+}
+
+/* Menu */
+.ant-menu-item-selected {
+  background: #EFF6FF !important;
+  color: #2563EB !important;
+}
+
+.ant-menu-item-selected::after {
+  border-color: #2563EB !important;
+}
+
+/* Upload */
+.ant-upload-drag {
+  border-color: #E2E8F0 !important;
+  background: #F8FAFC !important;
+  border-radius: 16px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.ant-upload-drag:hover {
+  border-color: #2563EB !important;
+}
+
+.ant-upload-drag-icon {
+  color: #2563EB !important;
+}
+
+/* Divider */
+.ant-divider {
+  border-color: #E2E8F0 !important;
 }

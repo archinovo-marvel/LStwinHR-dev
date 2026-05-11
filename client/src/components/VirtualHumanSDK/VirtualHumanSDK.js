@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import logFilter from '../../utils/logFilter.js';
 import { useSDKConnection, isAutoplayError, wrapAutoplaySafe, ensurePlayerAudible, setupAutoplayRecovery } from './useSDKConnection.js';
-import { useInterviewState } from './useInterviewState.js';
 import { useNetworkDiagnostics, checkNetworkConnection } from './useNetworkDiagnostics.js';
 
 const VirtualHumanSDK = forwardRef(({
@@ -10,7 +9,7 @@ const VirtualHumanSDK = forwardRef(({
   onAvatarClick,
   onVirtualHumanReply,
   onVirtualHumanStreamingEnd,
-  externalInterviewQuestions,
+  onAsrMessage,
 }, ref) => {
   // Core refs
   const avatarPlatformRef = useRef(null);
@@ -44,28 +43,8 @@ const VirtualHumanSDK = forwardRef(({
     onStatusChange,
     onVirtualHumanReply,
     onVirtualHumanStreamingEnd,
+    onAsrMessage,
   });
-
-  // Interview state hook
-  const interviewHook = useInterviewState({
-    externalInterviewQuestions,
-    avatarPlatformRef,
-    onVirtualHumanReply,
-    onVirtualHumanReplyRef: useRef(onVirtualHumanReply),
-  });
-
-  const {
-    interviewState,
-    interviewStateRef,
-    setInterviewState,
-    interviewQuestions,
-    askQuestion,
-    handleNextQuestion,
-    reAskCurrentQuestion,
-    startInterview,
-    stopInterview,
-    handleCandidateAnswerComplete,
-  } = interviewHook;
 
   // Network diagnostics
   const { performNetworkDiagnosis } = useNetworkDiagnostics();
@@ -183,7 +162,7 @@ const VirtualHumanSDK = forwardRef(({
 
     if (!avatarPlatformRef.current) {
       console.log('SDK未初始化，先初始化SDK...');
-      await sdkConnection.initializeSDK({ setIsConnected, setIsLoading, setError, setCurrentStatus, removeGreenBackground, startPing, stopPing, interviewStateRef, setInterviewState });
+      await sdkConnection.initializeSDK({ setIsConnected, setIsLoading, setError, setCurrentStatus, removeGreenBackground, startPing, stopPing });
     }
 
     try {
@@ -263,7 +242,7 @@ const VirtualHumanSDK = forwardRef(({
         setTimeout(() => connectAvatar(), 2000);
       }
     }
-  }, [sdkConnection.initializeSDK, performNetworkDiagnosis, removeGreenBackground, startPing, stopPing, interviewStateRef, setInterviewState, isLoading, isConnected]);
+  }, [sdkConnection.initializeSDK, performNetworkDiagnosis, removeGreenBackground, startPing, stopPing, isLoading, isConnected]);
 
   // --- Disconnect avatar ---
   const disconnectAvatar = useCallback(async () => {
@@ -307,6 +286,26 @@ const VirtualHumanSDK = forwardRef(({
     }
   }, [isConnected, checkConnectionStatus]);
 
+  const speakText = useCallback(async (text) => {
+    const isReallyConnected = checkConnectionStatus();
+    if (!avatarPlatformRef.current || (!isConnected && !isReallyConnected) || !text) {
+      return false;
+    }
+    try {
+      await avatarPlatformRef.current.writeText(String(text), {
+        nlp: false,
+        avatar_dispatch: {
+          interactive_mode: 1
+        }
+      });
+      return true;
+    } catch (e) {
+      console.error('纯播报失败:', e);
+      setError(e);
+      return false;
+    }
+  }, [isConnected, checkConnectionStatus]);
+
   // --- Recording ---
   const startRecording = useCallback(async () => {
     if (!avatarPlatformRef.current) return;
@@ -335,14 +334,12 @@ const VirtualHumanSDK = forwardRef(({
 
   // --- Expose methods to parent ---
   useImperativeHandle(ref, () => ({
-    sendText, connectAvatar, disconnectAvatar, startRecording, stopRecording, resumePlayback,
+    sendText, speakText, connectAvatar, disconnectAvatar, startRecording, stopRecording, resumePlayback,
     sendPing, checkConnectionStatus, startPing, stopPing, setAudioEnabled: setAudioEnabledState,
     performNetworkDiagnosis: (force) => performNetworkDiagnosis({ isDiagnosing, networkDiagnosis, setIsDiagnosing, setNetworkDiagnosis, setConnectionAdvice, force }),
     getNetworkDiagnosis: () => networkDiagnosis, getConnectionAdvice: () => connectionAdvice,
     isConnected, currentStatus, error, needsUserInteraction,
-    startInterview, stopInterview, askQuestion, reAskCurrentQuestion, handleCandidateAnswerComplete, handleNextQuestion,
-    setInterviewState, getInterviewState: () => interviewState, getInterviewQuestions: () => interviewQuestions
-  }), [sendText, connectAvatar, disconnectAvatar, startRecording, stopRecording, resumePlayback, sendPing, startPing, stopPing, setAudioEnabledState, performNetworkDiagnosis, networkDiagnosis, connectionAdvice, isConnected, currentStatus, error, needsUserInteraction, startInterview, stopInterview, askQuestion, interviewState, interviewQuestions]);
+  }), [sendText, speakText, connectAvatar, disconnectAvatar, startRecording, stopRecording, resumePlayback, sendPing, startPing, stopPing, setAudioEnabledState, performNetworkDiagnosis, networkDiagnosis, connectionAdvice, isConnected, currentStatus, error, needsUserInteraction]);
 
   // --- Auto connect on mount ---
   useEffect(() => {

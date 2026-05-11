@@ -7,6 +7,7 @@ import serverDataSync from '../utils/serverDataSync';
 import axios from 'axios';
 import { getCandidateStats } from '../utils/candidateStats';
 import CandidateDetailModal from '../components/CandidateDetailModal';
+import { colors } from '../theme/colors';
 
 // Custom SVG Icons
 const IconUser = ({ size = 14, color = 'currentColor', strokeWidth = 1.5 }) => (
@@ -76,14 +77,6 @@ const IconTrash = ({ size = 14, color = 'currentColor', strokeWidth = 1.5 }) => 
   </svg>
 );
 
-const IconUpload = ({ size = 14, color = 'currentColor', strokeWidth = 1.5 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="17 8 12 3 7 8" />
-    <line x1="12" y1="3" x2="12" y2="15" />
-  </svg>
-);
-
 const IconSearch = ({ size = 14, color = 'currentColor', strokeWidth = 1.5 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" />
@@ -119,8 +112,6 @@ const IconChevronUp = ({ size = 14, color = 'currentColor', strokeWidth = 1.5 })
 );
 
 const { Option } = Select;
-
-import { colors } from '../theme/colors';
 
 const PageWrapper = styled.div`
   min-height: 100vh;
@@ -450,7 +441,7 @@ const MBTITag = styled.span`
   display: inline-flex;
   padding: 4px 10px;
   font-size: 12px;
-  background: rgba(139, 115, 85, 0.1);
+  background: rgba(37,99,235,0.1);
   color: ${colors.highlight};
   border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
@@ -507,8 +498,8 @@ const RecommendationTag = styled.span`
   background: ${props => {
     switch(props.$level) {
       case '强烈推荐': return 'rgba(16, 185, 129, 0.1)';
-      case '推荐': return 'rgba(139, 115, 85, 0.1)';
-      case '待考虑': return 'rgba(245, 158, 11, 0.1)';
+      case '推荐': return 'rgba(37,99,235,0.1)';
+      case '不推荐': return 'rgba(100, 116, 139, 0.1)';
       default: return 'rgba(100, 116, 139, 0.1)';
     }
   }};
@@ -516,7 +507,7 @@ const RecommendationTag = styled.span`
     switch(props.$level) {
       case '强烈推荐': return colors.success;
       case '推荐': return colors.highlight;
-      case '待考虑': return colors.warning;
+      case '不推荐': return colors.textMuted;
       default: return colors.textMuted;
     }
   }};
@@ -569,7 +560,7 @@ const InterviewButton = styled(Button)`
   padding: 0 10px;
   font-size: 12px;
   border-radius: 6px;
-  background: rgba(139, 115, 85, 0.1);
+  background: rgba(37,99,235,0.1);
   border-color: transparent;
   color: ${colors.highlight};
 
@@ -649,21 +640,36 @@ const getResumeScoreValueFromRecord = (record) => {
 };
 
 const getRecommendationLabelFromResumeScore = (resumeScore) => {
+  // 注意：此函数已被 getRecommendationLabelFromRecord 的综合评分逻辑替代
+  // 此处仅作兼容保留，实际判定以 compositeScore >= 75 为准
   if (resumeScore >= 75) return '强烈推荐';
   if (resumeScore >= 60) return '推荐';
-  if (resumeScore >= 45) return '待考虑';
-  return '建议淘汰';
+  return '不推荐';
 };
 
 const getRecommendationLabelFromRecord = (record) => {
-  const explicitRecommendation = String(
-    record?.resumeAnalysisResult?.summary?.recommendation ||
-    record?.resumeAnalysis?.recommendation?.level ||
-    ''
-  ).trim();
+  // 综合评分 = 简历*0.4 + MBTI*0.1 + 面试*0.5
+  // 始终以综合分数计算结果为准，不再优先使用数据中存储的显式推荐标签
+  const resumeScore = getResumeScoreValueFromRecord(record);
+  const mbtiScore = record?.mbtiScore ?? record?.resumeAnalysisResult?.scores?.mbtiScore ?? 0;
+  const interviewScore = record?.interviewScore ?? record?.resumeAnalysisResult?.scores?.interviewScore ?? 0;
+  const compositeScore = Math.round(resumeScore * 0.4 + mbtiScore * 0.1 + interviewScore * 0.5);
 
-  if (explicitRecommendation) return explicitRecommendation;
-  return getRecommendationLabelFromResumeScore(getResumeScoreValueFromRecord(record));
+  // 新规则：不推荐(<60)、推荐(60-79)、强烈推荐(>=80)
+  if (compositeScore >= 80) return '强烈推荐';
+  if (compositeScore >= 60) return '推荐';
+  return '不推荐';
+};
+
+// 面试建议：基于简历评分
+const getInterviewSuggestionFromRecord = (record) => {
+  const resumeScore = getResumeScoreValueFromRecord(record);
+  return resumeScore >= 75 ? '建议面试' : '建议淘汰';
+};
+
+const getInterviewSuggestionColor = (record) => {
+  const resumeScore = getResumeScoreValueFromRecord(record);
+  return resumeScore >= 75 ? colors.success : colors.textMuted;
 };
 
 const getScoreColor = (score) => {
@@ -679,8 +685,6 @@ const ResumeAnalysis = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [reanalyzingCandidateId, setReanalyzingCandidateId] = useState(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [uploadLoading, setUploadLoading] = useState(false);
-  const uploadFileInputRef = useRef(null);
   const isDeletingRef = useRef(false);
   const candidatesLengthRef = useRef(0);
   const candidatesSnapshotRef = useRef('');
@@ -766,11 +770,25 @@ const ResumeAnalysis = () => {
           aValue = aValue || 0;
           bValue = bValue || 0;
           if (key === 'finalScore') {
-            aValue = a.hasInterview && a.finalScore ? a.finalScore : 0;
-            bValue = b.hasInterview && b.finalScore ? b.finalScore : 0;
+            if (a.hasInterview) {
+              const aResume = getResumeScoreFromRecord(a);
+              const aMbti = a.mbtiScore ?? a.resumeAnalysisResult?.scores?.mbtiScore ?? 0;
+              const aInterview = a.interviewScore ?? 0;
+              aValue = aResume > 0 ? Math.round(aResume * 0.4 + aMbti * 0.1 + aInterview * 0.5) : (a.finalScore || 0);
+            } else {
+              aValue = 0;
+            }
+            if (b.hasInterview) {
+              const bResume = getResumeScoreFromRecord(b);
+              const bMbti = b.mbtiScore ?? b.resumeAnalysisResult?.scores?.mbtiScore ?? 0;
+              const bInterview = b.interviewScore ?? 0;
+              bValue = bResume > 0 ? Math.round(bResume * 0.4 + bMbti * 0.1 + bInterview * 0.5) : (b.finalScore || 0);
+            } else {
+              bValue = 0;
+            }
           }
         } else if (key === 'recommendation') {
-          const recommendationRank = { '强烈推荐': 4, '推荐': 3, '待考虑': 2, '建议淘汰': 1 };
+          const recommendationRank = { '强烈推荐': 3, '推荐': 2, '不推荐': 1 };
           aValue = recommendationRank[getRecommendationLabelFromRecord(a)] || 0;
           bValue = recommendationRank[getRecommendationLabelFromRecord(b)] || 0;
         } else if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -864,9 +882,13 @@ const ResumeAnalysis = () => {
         } : item
       ));
 
+      const token = localStorage.getItem('token');
       const response = await fetch(`/api/analyze-resume/${candidate.id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ mode })
       });
 
@@ -950,50 +972,6 @@ const ResumeAnalysis = () => {
       message.error('刷新数据失败，请重试');
     }
   };
-
-  const handleUploadResume = useCallback(async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    setUploadLoading(true);
-    let successCount = 0, skipCount = 0, errorCount = 0;
-
-    for (const file of files) {
-      try {
-        const fileName = file.name;
-        const namePart = fileName.replace(/\.[^.]+$/, '');
-        const parts = namePart.split('_');
-        const candidateName = parts[0] || '未知';
-        const position = parts[1] || '未指定岗位';
-
-        const formData = new FormData();
-        formData.append('name', candidateName);
-        formData.append('position', position);
-        formData.append('status', '待分析');
-        formData.append('submitTime', new Date().toLocaleString('zh-CN'));
-        formData.append('resume', file);
-
-        const result = await serverDataSync.addCandidateWithFile(formData);
-        if (result) successCount++;
-      } catch (err) {
-        if (err.message?.includes('已存在') || err.message?.includes('409')) {
-          skipCount++;
-        } else {
-          errorCount++;
-        }
-      }
-    }
-
-    setUploadLoading(false);
-    if (e.target) e.target.value = '';
-
-    if (successCount > 0 || skipCount > 0) {
-      message.success(`上传完成：成功 ${successCount} 个${skipCount > 0 ? `，跳过 ${skipCount} 个（已存在）` : ''}${errorCount > 0 ? `，失败 ${errorCount} 个` : ''}`);
-      await refreshCandidates();
-    } else if (errorCount > 0) {
-      message.error(`上传失败 ${errorCount} 个文件，请重试`);
-    }
-  }, [refreshCandidates]);
 
   const cleanupInvalidCandidates = async () => {
     if (cleanupLoading) return;
@@ -1247,10 +1225,16 @@ const ResumeAnalysis = () => {
 
   const statistics = useMemo(() => {
     const statsResult = getCandidateStats(candidates);
+    // 简历评分 >= 75 分的候选人数（用于"建议面试"）
+    const resumeRecommended = candidates.filter(c => {
+      const score = getResumeScoreValueFromRecord(c);
+      return score >= 75;
+    }).length;
     return {
       total: statsResult.totalCandidates,
       analyzed: candidates.filter(c => ['已分析', '已分析(VL)', '已分析(local-VL)', '已分析(Qwen3.5-9B)'].includes(c.status)).length,
       recommended: statsResult.recommendedCandidates,
+      resumeRecommended,
       avgScore: statsResult.averageResumeScore
     };
   }, [candidates]);
@@ -1304,11 +1288,51 @@ const ResumeAnalysis = () => {
       width: 80,
       align: 'center',
       render: (score, record) => {
-        if (record.hasInterview && score) {
-          const { color, rgb } = getScoreColor(score);
-          return <ScoreCircle style={{ width: '36px', height: '36px', fontSize: '12px' }} $color={color} $rgb={rgb}>{score}</ScoreCircle>;
+        if (record.hasInterview) {
+          const resumeScore = getResumeScoreFromRecord(record);
+          const mbtiScore = record.mbtiScore ?? record.resumeAnalysisResult?.scores?.mbtiScore ?? 0;
+          const interviewScore = record.interviewScore ?? 0;
+          const computedFinal = resumeScore > 0
+            ? Math.round(resumeScore * 0.4 + mbtiScore * 0.1 + interviewScore * 0.5)
+            : score ?? 0;
+          if (computedFinal > 0) {
+            const { color, rgb } = getScoreColor(computedFinal);
+            return <ScoreCircle style={{ width: '36px', height: '36px', fontSize: '12px' }} $color={color} $rgb={rgb}>{computedFinal}</ScoreCircle>;
+          }
         }
         return <TimeText>-</TimeText>;
+      },
+    },
+    {
+      title: <SortableHeader title="面试建议" columnKey="interviewSuggestion" />,
+      key: 'interviewSuggestion',
+      width: 90,
+      align: 'center',
+      sorter: (a, b) => {
+        const scoreA = getResumeScoreValueFromRecord(a);
+        const scoreB = getResumeScoreValueFromRecord(b);
+        return scoreA - scoreB;
+      },
+      render: (_, record) => {
+        const resumeScore = getResumeScoreFromRecord(record);
+        if (!resumeScore || resumeScore === 0) {
+          return <TimeText>-</TimeText>;
+        }
+        const label = getInterviewSuggestionFromRecord(record);
+        const color = getInterviewSuggestionColor(record);
+        return (
+          <RecommendationTag
+            style={{
+              fontSize: '11px',
+              padding: '2px 8px',
+              background: label === '建议面试' ? colors.accentSub : colors.frost,
+              color: color
+            }}
+            $level={label}
+          >
+            {label}
+          </RecommendationTag>
+        );
       },
     },
     {
@@ -1400,17 +1424,6 @@ const ResumeAnalysis = () => {
             <PageSubtitle>查看和管理候选人简历分析结果，支持智能筛选与评估</PageSubtitle>
           </HeaderLeft>
           <HeaderActions>
-            <input
-              type="file"
-              ref={uploadFileInputRef}
-              style={{ display: 'none' }}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              multiple
-              onChange={handleUploadResume}
-            />
-            <ActionButton $primary icon={<IconUpload />} onClick={() => uploadFileInputRef.current?.click()} loading={uploadLoading}>
-              上传简历
-            </ActionButton>
           </HeaderActions>
         </HeaderContent>
       </PageHeader>
@@ -1426,17 +1439,17 @@ const ResumeAnalysis = () => {
               </StatIndicator>
             </StatCard>
             <StatCard variants={fadeInUp}>
-              <StatLabel>已分析</StatLabel>
-              <StatValue>{statistics.analyzed}</StatValue>
-              <StatIndicator $color={colors.success}>
-                <IconTrophy size={13} /> 分析完成
+              <StatLabel>建议面试</StatLabel>
+              <StatValue>{statistics.resumeRecommended}</StatValue>
+              <StatIndicator $color={colors.highlight}>
+                <IconDocument size={13} /> 简历>=75
               </StatIndicator>
             </StatCard>
             <StatCard variants={fadeInUp}>
               <StatLabel>强烈推荐</StatLabel>
               <StatValue>{statistics.recommended}</StatValue>
-              <StatIndicator $color={colors.highlight}>
-                <IconDocument size={13} /> 待面试
+              <StatIndicator $color={colors.success}>
+                <IconTrophy size={13} /> 综合>=80
               </StatIndicator>
             </StatCard>
           </StatsGrid>
@@ -1554,11 +1567,11 @@ const ResumeAnalysis = () => {
             <div style={{ height: '600px', borderRadius: '12px', overflow: 'hidden', background: colors.bg }}>
               {previewResume.resumeFilePath ? (
                 previewResume.resumeFileName?.endsWith('.pdf') ? (
-                  <iframe src={`${serverDataSync.baseUrl}/resume-file/${previewResume.id}`} width="100%" height="100%" style={{ border: 'none' }} />
+                  <iframe src={`${serverDataSync.baseUrl}/resume-file/${previewResume.id}?token=${localStorage.getItem('token')}`} width="100%" height="100%" style={{ border: 'none' }} />
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: '16px' }}>
                     <IconDocument size={48} color={colors.textMuted} />
-                    <Button type="primary" onClick={() => window.open(`${serverDataSync.baseUrl}/resume-file/${previewResume.id}`, '_blank')}>
+                    <Button type="primary" onClick={() => window.open(`${serverDataSync.baseUrl}/resume-file/${previewResume.id}?token=${localStorage.getItem('token')}`, '_blank')}>
                       打开文件
                     </Button>
                   </div>

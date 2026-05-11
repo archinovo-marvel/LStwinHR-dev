@@ -1,268 +1,403 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import styled from 'styled-components';
-import { Upload, Button, List, Spin, message, Card } from 'antd';
-import { InboxOutlined, FileTextOutlined, UploadOutlined } from '@ant-design/icons';
+import { Upload, Button, Spin, Modal } from 'antd';
+import { App } from 'antd';
+import {
+  InboxOutlined,
+  FileTextOutlined,
+  BulbOutlined,
+  ThunderboltOutlined,
+  DeleteOutlined,
+  CloseOutlined
+} from '@ant-design/icons';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { colors } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
 
 const { Dragger } = Upload;
 
+// ============================================
+// PAGE WRAPPER
+// ============================================
 const PageWrapper = styled.div`
   background: ${colors.bg};
   min-height: 100vh;
   font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-  padding: 60px;
 `;
 
-const PageInner = styled.div`
-  max-width: 1400px;
+// ============================================
+// HERO SECTION
+// ============================================
+const HeroSection = styled.section`
+  padding: 120px 60px 60px;
+  background: ${colors.bg};
+  max-width: 1200px;
   margin: 0 auto;
+
+  @media (max-width: 768px) {
+    padding: 100px 24px 40px;
+  }
 `;
 
-const PageHeader = styled.div`
-  margin-bottom: 48px;
-`;
-
-const SectionLabel = styled.span`
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: ${colors.textMuted};
-  display: block;
-  margin-bottom: 24px;
-`;
-
-const PageTitle = styled.h1`
+const HeroTitle = styled(motion.h1)`
   font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: 36px;
+  font-size: clamp(32px, 4vw, 48px);
   font-weight: 400;
   color: ${colors.text};
+  line-height: 1.3;
   margin: 0 0 16px 0;
 `;
 
-const PageSubtitle = styled.p`
+const HeroDesc = styled(motion.p)`
   font-size: 16px;
   color: ${colors.textMuted};
-  margin: 0;
+  line-height: 1.7;
+  margin: 0 0 48px 0;
+  max-width: 600px;
 `;
 
-const ContentGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 48px;
-
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const LeftPanel = styled.div``;
-
-const RightPanel = styled.div``;
-
-const CardStyled = styled(Card)`
+// ============================================
+// UPLOAD AREA
+// ============================================
+const UploadContainer = styled(motion.div)`
   background: ${colors.surface};
+  border-radius: 16px;
   border: 1px solid ${colors.border};
-  border-radius: 8px;
-  box-shadow: 0 1px 3px ${colors.shadow};
-
-  .ant-card-head {
-    border-bottom: 1px solid ${colors.border};
-    min-height: 56px;
-  }
-
-  .ant-card-head-title {
-    font-family: 'Noto Sans SC', sans-serif;
-    font-weight: 500;
-  }
-`;
-
-const UploadCard = styled(CardStyled)`
-  margin-bottom: 24px;
-`;
-
-const ResultCard = styled(CardStyled)`
-  .optimized-content {
-    background: ${colors.frost};
-    border-radius: 8px;
-    padding: 24px;
-    margin-top: 16px;
-  }
-
-  .content-section {
-    margin-bottom: 20px;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
-
-  .section-title {
-    font-weight: 500;
-    color: ${colors.text};
-    margin-bottom: 8px;
-    font-size: 14px;
-  }
-
-  .section-text {
-    color: ${colors.textSecondary};
-    font-size: 14px;
-    line-height: 1.7;
-    white-space: pre-wrap;
-  }
-
-  .score-badge {
-    display: inline-block;
-    background: ${colors.accentSub};
-    color: ${colors.accent};
-    padding: 4px 12px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
-    margin-bottom: 16px;
-  }
+  padding: 32px;
+  margin-bottom: 60px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.03);
 `;
 
 const UploadArea = styled.div`
   .ant-upload-drag {
     border: 2px dashed ${colors.border};
-    border-radius: 8px;
+    border-radius: 12px;
     background: ${colors.frost};
     transition: all 0.3s ease;
+    padding: 40px 24px;
 
     &:hover {
       border-color: ${colors.accent};
+      background: ${colors.accentSub};
     }
   }
 
-  .ant-upload-drag-icon {
+  .ant-upload-drag-icon .anticon {
+    font-size: 40px;
     color: ${colors.accent};
   }
 
   .ant-upload-text {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 500;
     color: ${colors.text};
-    margin-bottom: 8px;
+    margin-top: 16px;
   }
 
   .ant-upload-hint {
     color: ${colors.textMuted};
-    font-size: 14px;
+    font-size: 13px;
+    margin-top: 8px;
   }
 `;
 
-const LoadingContainer = styled.div`
+// ============================================
+// RESULT SECTION
+// ============================================
+const ResultSection = styled.section`
+  padding: 0 60px 60px;
+  background: ${colors.bg};
+  max-width: 1200px;
+  margin: 0 auto;
+
+  @media (max-width: 768px) {
+    padding: 0 24px 40px;
+  }
+`;
+
+const ResultContainer = styled(motion.div)`
+  background: ${colors.surface};
+  border-radius: 16px;
+  border: 1px solid ${colors.border};
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.03);
+`;
+
+const ResultHeader = styled.div`
+  padding: 24px 32px;
+  border-bottom: 1px solid ${colors.border};
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: ${colors.frost};
+`;
+
+const ResultTitle = styled.div`
+  font-size: 16px;
+  font-weight: 500;
+  color: ${colors.text};
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const ResultBody = styled.div`
+  padding: 32px;
+`;
+
+const ContentBlock = styled.div`
+  margin-bottom: 32px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const BlockTitle = styled.div`
+  font-size: 14px;
+  font-weight: 500;
+  color: ${colors.text};
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .anticon {
+    color: ${colors.accent};
+  }
+`;
+
+const ItemList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+const ItemCard = styled.div`
+  background: ${colors.frost};
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: ${colors.text};
+  line-height: 1.6;
+  border-left: 3px solid ${colors.accent};
+`;
+
+const SuggestionCard = styled.div`
+  background: ${colors.frost};
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: ${colors.text};
+  line-height: 1.6;
+  border-left: 3px solid #f59e0b;
+`;
+
+// ============================================
+// HISTORY SECTION
+// ============================================
+const HistorySection = styled.section`
+  padding: 0 60px 80px;
+  background: ${colors.bg};
+  max-width: 1200px;
+  margin: 0 auto;
+
+  @media (max-width: 768px) {
+    padding: 0 24px 60px;
+  }
+`;
+
+const SectionLabel = styled.div`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${colors.textMuted};
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+`;
+
+const HistoryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+`;
+
+const HistoryCard = styled(motion.div)`
+  background: ${colors.surface};
+  border-radius: 12px;
+  border: 1px solid ${colors.border};
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+
+  &:hover {
+    border-color: ${colors.accent};
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+    transform: translateY(-2px);
+  }
+`;
+
+const HistoryHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+`;
+
+const HistoryIcon = styled.div`
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: ${colors.accentSub};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .anticon {
+    font-size: 16px;
+    color: ${colors.accent};
+  }
+`;
+
+const HistoryName = styled.div`
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${colors.text};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const HistoryDate = styled.div`
+  font-size: 12px;
+  color: ${colors.textMuted};
+`;
+
+const HistoryActions = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid ${colors.border};
+`;
+
+// ============================================
+// MODAL STYLES
+// ============================================
+const ModalContent = styled.div`
+  padding: 0;
+`;
+
+const ModalBlock = styled.div`
+  margin-bottom: 28px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const ModalBlockTitle = styled.div`
+  font-size: 15px;
+  font-weight: 500;
+  color: ${colors.text};
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .anticon {
+    font-size: 18px;
+  }
+`;
+
+const ModalItem = styled.div`
+  background: ${colors.frost};
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 14px;
+  color: ${colors.text};
+  line-height: 1.6;
+  margin-bottom: 10px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+// ============================================
+// LOADING & EMPTY STATES
+// ============================================
+const LoadingState = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 0;
-  text-align: center;
+  padding: 60px 40px;
 `;
 
-const LoadingText = styled.p`
-  margin-top: 16px;
+const LoadingText = styled.div`
+  margin-top: 20px;
+  font-size: 14px;
+  color: ${colors.textMuted};
+`;
+
+const EmptyState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
   color: ${colors.textMuted};
   font-size: 14px;
 `;
 
-const EmptyState = styled.div`
-  text-align: center;
-  padding: 60px 20px;
-  color: ${colors.textMuted};
-
-  .empty-icon {
-    font-size: 48px;
-    color: ${colors.border};
-    margin-bottom: 16px;
-  }
-`;
-
-const HistoryItem = styled.div`
-  padding: 16px;
-  border-bottom: 1px solid ${colors.border};
-  cursor: pointer;
-  transition: background 0.2s ease;
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  &:hover {
-    background: ${colors.frost};
-  }
-
-  .file-name {
-    font-weight: 500;
-    color: ${colors.text};
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .file-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    color: ${colors.textMuted};
-  }
-
-  .score {
-    color: ${colors.accent};
-    font-weight: 500;
-  }
-
-  .status {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-
-    &.completed {
-      background: ${colors.accentSub};
-      color: ${colors.accent};
-    }
-
-    &.processing {
-      background: ${colors.warning}20;
-      color: ${colors.warning};
-    }
-
-    &.failed {
-      background: ${colors.error}20;
-      color: ${colors.error};
-    }
-  }
-`;
-
+// ============================================
+// COMPONENT
+// ============================================
 const PersonalResumePage = () => {
+  const { message } = App.useApp();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [selectedFile, setSelectedFile] = useState(null);
-  const [optimizing, setOptimizing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const token = localStorage.getItem('token');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedResume, setSelectedResume] = useState(null);
+  const getToken = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      message.error('登录已过期，请重新登录');
+      logout();
+      navigate('/login');
+      return null;
+    }
+    return token;
+  };
 
   useEffect(() => {
     fetchHistory();
   }, []);
 
   const fetchHistory = async () => {
-    setLoading(true);
+    const token = getToken();
+    if (!token) return;
     try {
       const res = await axios.get('/api/personal/resume/history', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setHistory(res.data || []);
     } catch (error) {
-      console.error('获取历史记录失败:', error);
-      message.error('获取历史记录失败');
-    } finally {
-      setLoading(false);
+      if (error.response?.status === 401) {
+        message.error('登录已过期，请重新登录');
+        logout();
+        navigate('/login');
+        return;
+      }
+      setHistory([]);
     }
   };
 
@@ -270,22 +405,28 @@ const PersonalResumePage = () => {
     if (!file) return;
 
     const isPdf = file.type === 'application/pdf';
-    const isDoc = file.type === 'application/msword' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const isDoc = file.type === 'application/msword' ||
+                  file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
     if (!isPdf && !isDoc) {
       message.error('仅支持 PDF 或 Word 文档');
       return false;
     }
 
-    const isLt10M = file.size / 1024 / 1024 < 10;
-    if (!isLt10M) {
+    if (file.size / 1024 / 1024 >= 10) {
       message.error('文件大小不能超过 10MB');
       return false;
     }
 
     setSelectedFile(file);
-    setOptimizing(true);
+    setAnalyzing(true);
     setResult(null);
+
+    const token = getToken();
+    if (!token) {
+      setAnalyzing(false);
+      return false;
+    }
 
     const formData = new FormData();
     formData.append('file', file);
@@ -299,23 +440,89 @@ const PersonalResumePage = () => {
       });
 
       setResult(res.data);
-      message.success('简历优化完成');
+      message.success('简历分析完成');
       fetchHistory();
     } catch (error) {
-      console.error('上传失败:', error);
-      message.error(error.response?.data?.message || '上传失败，请重试');
+      if (error.response?.status === 401) {
+        message.error('登录已过期，请重新登录');
+        logout();
+        navigate('/login');
+      } else {
+        message.error(error.response?.data?.message || '分析失败，请重试');
+      }
     } finally {
-      setOptimizing(false);
+      setAnalyzing(false);
     }
 
     return false;
+  };
+
+  const fetchResumeDetail = async (id) => {
+    const token = getToken();
+    if (!token) return null;
+    try {
+      const res = await axios.get(`/api/personal/resume/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        message.error('登录已过期，请重新登录');
+        logout();
+        navigate('/login');
+        return null;
+      }
+      message.error('获取详情失败');
+      return null;
+    }
+  };
+
+  const handleDelete = async (id, e) => {
+    e.stopPropagation();
+    const token = getToken();
+    if (!token) return;
+    Modal.confirm({
+      title: '确认删除',
+      content: '删除后无法恢复，确定要删除这份简历吗？',
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await axios.delete(`/api/personal/resume/${id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          message.success('删除成功');
+          fetchHistory();
+          if (selectedResume?.id === id) {
+            setModalVisible(false);
+            setSelectedResume(null);
+          }
+        } catch (error) {
+          if (error.response?.status === 401) {
+            message.error('登录已过期，请重新登录');
+            logout();
+            navigate('/login');
+          } else {
+            message.error('删除失败');
+          }
+        }
+      }
+    });
+  };
+
+  const handleViewHistory = async (item) => {
+    const detail = await fetchResumeDetail(item.id);
+    if (detail) {
+      setSelectedResume(detail);
+      setModalVisible(true);
+    }
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('zh-CN', {
-      year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -323,84 +530,79 @@ const PersonalResumePage = () => {
     });
   };
 
-  const getStatusClass = (status) => {
-    switch (status) {
-      case 'completed':
-        return 'completed';
-      case 'processing':
-        return 'processing';
-      default:
-        return 'failed';
+  // 渲染结果内容
+  const renderResultContent = (data) => {
+    const content = data?.optimized_content;
+    if (!content) {
+      return <EmptyState>暂无分析结果</EmptyState>;
     }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'completed':
-        return '已完成';
-      case 'processing':
-        return '处理中';
-      default:
-        return '失败';
-    }
-  };
-
-  const renderOptimizedContent = () => {
-    if (!result || !result.optimized_content) {
-      return (
-        <EmptyState>
-          <div className="empty-icon">
-            <FileTextOutlined />
-          </div>
-          <p>暂无优化结果</p>
-        </EmptyState>
-      );
-    }
-
-    const content = result.optimized_content;
 
     return (
-      <div className="optimized-content">
-        {result.resume_score && (
-          <div className="score-badge">简历评分: {result.resume_score}</div>
-        )}
-
-        {content.summary && (
-          <div className="content-section">
-            <div className="section-title">简历摘要</div>
-            <div className="section-text">{content.summary}</div>
-          </div>
-        )}
-
-        {content.strengths && content.strengths.length > 0 && (
-          <div className="content-section">
-            <div className="section-title">优势亮点</div>
-            <div className="section-text">
-              {content.strengths.map((item, index) => (
-                <div key={index}>• {item}</div>
+      <>
+        {content.highlights && content.highlights.length > 0 && (
+          <ContentBlock>
+            <BlockTitle>
+              <BulbOutlined />
+              简历亮点
+            </BlockTitle>
+            <ItemList>
+              {content.highlights.map((item, index) => (
+                <ItemCard key={index}>{item}</ItemCard>
               ))}
-            </div>
-          </div>
+            </ItemList>
+          </ContentBlock>
         )}
 
         {content.suggestions && content.suggestions.length > 0 && (
-          <div className="content-section">
-            <div className="section-title">优化建议</div>
-            <div className="section-text">
+          <ContentBlock>
+            <BlockTitle>
+              <ThunderboltOutlined />
+              优化建议
+            </BlockTitle>
+            <ItemList>
               {content.suggestions.map((item, index) => (
-                <div key={index}>• {item}</div>
+                <SuggestionCard key={index}>{item}</SuggestionCard>
               ))}
-            </div>
-          </div>
+            </ItemList>
+          </ContentBlock>
+        )}
+      </>
+    );
+  };
+
+  // Modal 内容
+  const renderModalContent = () => {
+    const content = selectedResume?.optimized_content;
+    if (!content) {
+      return <EmptyState>暂无分析结果</EmptyState>;
+    }
+
+    return (
+      <ModalContent>
+        {content.highlights && content.highlights.length > 0 && (
+          <ModalBlock>
+            <ModalBlockTitle>
+              <BulbOutlined style={{ color: colors.accent }} />
+              简历亮点
+            </ModalBlockTitle>
+            {content.highlights.map((item, index) => (
+              <ModalItem key={index}>{item}</ModalItem>
+            ))}
+          </ModalBlock>
         )}
 
-        {content.improved_version && (
-          <div className="content-section">
-            <div className="section-title">优化后版本</div>
-            <div className="section-text">{content.improved_version}</div>
-          </div>
+        {content.suggestions && content.suggestions.length > 0 && (
+          <ModalBlock>
+            <ModalBlockTitle>
+              <ThunderboltOutlined style={{ color: '#f59e0b' }} />
+              优化建议
+            </ModalBlockTitle>
+            {content.suggestions.map((item, index) => (
+              <ModalItem key={index}>{item}</ModalItem>
+            ))}
+          </ModalBlock>
         )}
-      </div>
+      </ModalContent>
     );
   };
 
@@ -408,13 +610,7 @@ const PersonalResumePage = () => {
     <PageWrapper>
       <style>
         {`
-          @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500&family=Noto+Sans+SC:wght@300;400;500&family=JetBrains+Mono:wght@400&family=Cabinet+Grotesk:wght@400;500;700&display=swap');
-
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
+          @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500&family=Noto+Sans+SC:wght@300;400;500&display=swap');
 
           ::selection {
             background: ${colors.highlight};
@@ -431,146 +627,172 @@ const PersonalResumePage = () => {
 
           ::-webkit-scrollbar-thumb {
             background: ${colors.border};
-          }
-
-          @media (max-width: 768px) {
-            ${PageWrapper} {
-              padding: 24px;
-            }
+            border-radius: 3px;
           }
         `}
       </style>
 
-      <PageInner>
-        <PageHeader>
-          <SectionLabel>个人服务</SectionLabel>
-          <PageTitle>简历优化</PageTitle>
-          <PageSubtitle>上传您的简历，AI将分析内容并提供专业的优化建议</PageSubtitle>
-        </PageHeader>
+      {/* Hero Section */}
+      <HeroSection>
+        <HeroTitle
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          简历优化建议
+        </HeroTitle>
+        <HeroDesc
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
+          上传您的简历，AI 将分析内容并给出专业的亮点总结与优化建议，帮助您提升简历竞争力。
+        </HeroDesc>
 
-        <ContentGrid>
-          <LeftPanel>
-            <UploadCard
-              title="上传简历"
-              extra={<span style={{ color: colors.textMuted, fontSize: 12 }}>支持 PDF、Word 格式，最大 10MB</span>}
+        <UploadContainer
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          <UploadArea>
+            <Dragger
+              name="file"
+              multiple={false}
+              showUploadList={false}
+              beforeUpload={handleFileUpload}
+              disabled={analyzing}
             >
-              <Dragger
-                name="file"
-                multiple={false}
-                showUploadList={false}
-                beforeUpload={handleFileUpload}
-                disabled={optimizing || uploading}
-              >
-                <p className="ant-upload-drag-icon">
-                  <InboxOutlined />
-                </p>
-                <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-                <p className="ant-upload-hint">
-                  {selectedFile ? `已选择: ${selectedFile.name}` : '支持 PDF 和 Word 文档'}
-                </p>
-              </Dragger>
+              <p className="ant-upload-drag-icon">
+                <InboxOutlined />
+              </p>
+              <p className="ant-upload-text">
+                {selectedFile ? selectedFile.name : '点击或拖拽文件到此区域上传'}
+              </p>
+              <p className="ant-upload-hint">
+                支持 PDF、Word 文档，最大 10MB
+              </p>
+            </Dragger>
+          </UploadArea>
+        </UploadContainer>
+      </HeroSection>
 
-              {selectedFile && !optimizing && !result && (
-                <div style={{ marginTop: 16, textAlign: 'center' }}>
-                  <Button
-                    type="primary"
-                    icon={<UploadOutlined />}
-                    onClick={() => handleFileUpload(selectedFile)}
-                  >
-                    开始优化
-                  </Button>
-                </div>
-              )}
-            </UploadCard>
-
-            {optimizing && (
-              <CardStyled title="优化结果">
-                <LoadingContainer>
+      {/* Result Section */}
+      <ResultSection>
+        <AnimatePresence mode="wait">
+          {analyzing ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <ResultContainer>
+                <LoadingState>
                   <Spin size="large" />
-                  <LoadingText>AI 正在分析您的简历，请稍候...</LoadingText>
-                </LoadingContainer>
-              </CardStyled>
-            )}
-
-            {!optimizing && result && (
-              <ResultCard title="优化结果">
-                {renderOptimizedContent()}
-
-                <div style={{ marginTop: 24, textAlign: 'center' }}>
+                  <LoadingText>AI 正在分析您的简历...</LoadingText>
+                </LoadingState>
+              </ResultContainer>
+            </motion.div>
+          ) : result ? (
+            <motion.div
+              key="result"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+            >
+              <ResultContainer>
+                <ResultHeader>
+                  <ResultTitle>
+                    <FileTextOutlined />
+                    {result.original_file_name || '分析结果'}
+                  </ResultTitle>
                   <Button
+                    type="text"
+                    icon={<CloseOutlined />}
                     onClick={() => {
                       setSelectedFile(null);
                       setResult(null);
                     }}
                   >
-                    重新上传
+                    清除
                   </Button>
-                </div>
-              </ResultCard>
-            )}
+                </ResultHeader>
+                <ResultBody>
+                  {renderResultContent(result)}
+                </ResultBody>
+              </ResultContainer>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </ResultSection>
 
-            {!optimizing && !result && (
-              <CardStyled title="优化结果">
-                <EmptyState>
-                  <div className="empty-icon">
-                    <FileTextOutlined />
-                  </div>
-                  <p>上传简历后将在此显示优化结果</p>
-                </EmptyState>
-              </CardStyled>
-            )}
-          </LeftPanel>
+      {/* History Section */}
+      {history.length > 0 && (
+        <HistorySection>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
+            <SectionLabel>历史记录 ({history.length})</SectionLabel>
+          </motion.div>
 
-          <RightPanel>
-            <CardStyled title="历史记录">
-              {loading ? (
-                <LoadingContainer>
-                  <Spin size="small" />
-                </LoadingContainer>
-              ) : history.length === 0 ? (
-                <EmptyState>
-                  <div className="empty-icon">
+          <HistoryGrid>
+            {history.map((item, index) => (
+              <HistoryCard
+                key={item.id}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: index * 0.05 }}
+                onClick={() => handleViewHistory(item)}
+              >
+                <HistoryHeader>
+                  <HistoryIcon>
                     <FileTextOutlined />
-                  </div>
-                  <p>暂无历史记录</p>
-                </EmptyState>
-              ) : (
-                <div style={{ maxHeight: 600, overflowY: 'auto' }}>
-                  {history.map((item) => (
-                    <HistoryItem
-                      key={item.id}
-                      onClick={() => {
-                        if (item.status === 'completed' && item.optimized_content) {
-                          setResult({
-                            resume_score: item.resume_score,
-                            optimized_content: item.optimized_content
-                          });
-                        }
-                      }}
-                    >
-                      <div className="file-name">
-                        <FileTextOutlined />
-                        {item.original_file_name}
-                      </div>
-                      <div className="file-meta">
-                        <span className={`status ${getStatusClass(item.status)}`}>
-                          {getStatusText(item.status)}
-                        </span>
-                        {item.resume_score && (
-                          <span className="score">评分: {item.resume_score}</span>
-                        )}
-                      </div>
-                      <div className="file-meta" style={{ marginTop: 8 }}>
-                        <span>{formatDate(item.created_at)}</span>
-                      </div>
-                    </HistoryItem>
-                  ))}
-                </div>
-              )}
-            </CardStyled>
-          </RightPanel>
-        </ContentGrid>
-      </PageInner>
+                  </HistoryIcon>
+                  <HistoryName>{item.original_file_name}</HistoryName>
+                </HistoryHeader>
+                <HistoryDate>{formatDate(item.created_at)}</HistoryDate>
+                <HistoryActions>
+                  <span style={{ fontSize: 12, color: colors.textMuted }}>
+                    点击查看详情
+                  </span>
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => handleDelete(item.id, e)}
+                  />
+                </HistoryActions>
+              </HistoryCard>
+            ))}
+          </HistoryGrid>
+        </HistorySection>
+      )}
+
+      {/* Detail Modal */}
+      <Modal
+        open={modalVisible}
+        onCancel={() => {
+          setModalVisible(false);
+          setSelectedResume(null);
+        }}
+        title={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FileTextOutlined style={{ color: colors.accent }} />
+            {selectedResume?.original_file_name || '简历分析报告'}
+          </span>
+        }
+        footer={null}
+        width={600}
+        centered
+      >
+        {renderModalContent()}
+      </Modal>
     </PageWrapper>
   );
 };

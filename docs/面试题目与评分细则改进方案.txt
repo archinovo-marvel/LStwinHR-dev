@@ -1,0 +1,2133 @@
+================================================================================
+            企业端面试访谈系统 - 题目与评分细则改进方案设计文档
+================================================================================
+生成日期: 2026-05-06
+文档版本: v1.0
+
+================================================================================
+目录
+================================================================================
+
+一、P0优先级改进方案（必须完成）
+   1.1 增加评分维度
+   1.2 优化关键词评分上下文判断
+
+二、P1优先级改进方案（强烈建议）
+   2.1 增加题目难度分级机制
+   2.2 增加岗位权重配置功能
+   2.3 增加负面回答识别机制
+
+三、P2优先级改进方案（功能增强）
+   3.1 增加评分置信度指标
+   3.2 增加岗位定制化题目库
+   3.3 增加报告录用建议和风险提示
+
+================================================================================
+一、P0优先级改进方案
+================================================================================
+
+--------------------------------------------------------------------------------
+1.1 增加评分维度
+--------------------------------------------------------------------------------
+
+【现状分析】
+当前AI评分仅有4个维度：relevance、depth、clarity、professionalism
+无法全面评估候选人回答的质量和真实性
+
+【改进目标】
+扩展为8个评分维度，提升评估全面性和准确性
+
+【新增维度定义】
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        扩展评分维度体系（8维度）                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  原有维度（4个）                                                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
+│  │ relevance   │ │   depth     │ │  clarity    │ │professionalism│         │
+│  │   相关性    │ │    深度     │ │   清晰度    │ │    专业性    │          │
+│  │   0-10分    │ │   0-10分    │ │   0-10分    │ │    0-10分    │          │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
+│                                                                             │
+│  新增维度（4个）                                                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
+│  │  evidence   │ │actionability│ │selfAwareness│ │growthMindset│         │
+│  │   证据性    │ │   可执行性  │ │  自我认知   │ │  成长思维   │          │
+│  │   0-10分    │ │   0-10分    │ │   0-10分    │ │   0-10分    │          │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【各维度详细定义】
+
+1. evidence（证据性）- 新增
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 定义：回答中是否包含具体的数据、案例、成果等可验证的证据                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 评分标准：                                                                   │
+│ 8-10分：提供具体数据（提升30%、节省50万）、可验证案例、第三方认可            │
+│ 4-7分：有案例描述但缺乏数据支撑，或数据模糊（"大幅提升"）                    │
+│ 0-3分：纯理论描述，无任何具体案例或数据                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 识别关键词：                                                                 │
+│ 高分词：提升了X%、节省了Y万、Z个项目、N次优化、具体数据、量化指标            │
+│ 低分词：大概、可能、很多、一些、比较大的、显著的                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+2. actionability（可执行性）- 新增
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 定义：候选人描述的方法、方案是否具有可操作性，能否在实际工作中落地            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 评分标准：                                                                   │
+│ 8-10分：提供具体步骤、时间节点、资源需求、风险预案，逻辑完整可执行           │
+│ 4-7分：有基本思路但缺乏细节，或过于理想化                                    │
+│ 0-3分：空泛理论，无法落地，或完全依赖他人/外部条件                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 识别关键词：                                                                 │
+│ 高分词：第一步、第二步、时间节点、资源分配、风险预案、具体步骤               │
+│ 低分词：看情况、再说、到时候、尽量、争取                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+3. selfAwareness（自我认知）- 新增
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 定义：候选人对自身能力、局限、情绪的认知深度和诚实度                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 评分标准：                                                                   │
+│ 8-10分：坦诚承认不足，有具体改进计划，能客观评价自己的优劣势                 │
+│ 4-7分：能说出部分优缺点，但分析不够深入或过于笼统                            │
+│ 0-3分：回避缺点、过度自信、或完全缺乏自我反思                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 识别关键词：                                                                 │
+│ 高分词：我的不足是、我需要改进、我在XX方面还有差距、我正在学习               │
+│ 低分词：我没什么缺点、我都很擅长、这个问题不存在                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+4. growthMindset（成长思维）- 新增
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 定义：候选人是否展现从失败中学习、持续改进、拥抱挑战的心态                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 评分标准：                                                                   │
+│ 8-10分：主动分享失败经历及学到的教训，展现持续学习和改进的行动               │
+│ 4-7分：能接受失败，但学习转化不够明显                                        │
+│ 0-3分：回避失败、归咎外因、或表现出固定型思维                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 识别关键词：                                                                 │
+│ 高分词：我学到了、下次我会、这让我意识到、我后来改进了、持续学习             │
+│ 低分词：这不是我的问题、运气不好、环境不允许、无法改变                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【代码实现方案】
+
+文件：client/src/utils/interviewScoring.js
+
+修改位置：dimensionRubrics 对象
+
+新增评分标准：
+
+```javascript
+// 扩展后的评分维度定义
+this.extendedRubrics = {
+  // 原有维度
+  relevance: {
+    label: '相关性',
+    description: '回答是否切题',
+    weight: 1.0
+  },
+  depth: {
+    label: '深度',
+    description: '内容深度和细节程度',
+    weight: 1.2  // 深度权重更高
+  },
+  clarity: {
+    label: '清晰度',
+    description: '表达是否清晰流畅',
+    weight: 0.8
+  },
+  professionalism: {
+    label: '专业性',
+    description: '职业素养和成熟度',
+    weight: 1.0
+  },
+  // 新增维度
+  evidence: {
+    label: '证据性',
+    description: '是否有具体数据、案例支撑',
+    weight: 1.1,
+    rubric: [
+      { range: [8, 10], desc: '提供具体数据、可验证案例、第三方认可' },
+      { range: [4, 7], desc: '有案例但缺乏数据，或数据模糊' },
+      { range: [0, 3], desc: '纯理论描述，无具体案例或数据' }
+    ]
+  },
+  actionability: {
+    label: '可执行性',
+    description: '方案是否具有可操作性',
+    weight: 0.9,
+    rubric: [
+      { range: [8, 10], desc: '具体步骤、时间节点、资源需求、风险预案' },
+      { range: [4, 7], desc: '有基本思路但缺乏细节' },
+      { range: [0, 3], desc: '空泛理论，无法落地' }
+    ]
+  },
+  selfAwareness: {
+    label: '自我认知',
+    description: '对自身能力和局限的认知深度',
+    weight: 1.0,
+    rubric: [
+      { range: [8, 10], desc: '坦诚承认不足，有具体改进计划' },
+      { range: [4, 7], desc: '能说出部分优缺点，分析不够深入' },
+      { range: [0, 3], desc: '回避缺点、过度自信或缺乏反思' }
+    ]
+  },
+  growthMindset: {
+    label: '成长思维',
+    description: '从失败中学习、持续改进的心态',
+    weight: 1.1,
+    rubric: [
+      { range: [8, 10], desc: '主动分享失败教训，展现持续学习行动' },
+      { range: [4, 7], desc: '能接受失败，学习转化不明显' },
+      { range: [0, 3], desc: '回避失败、归咎外因、固定型思维' }
+    ]
+  }
+};
+```
+
+【AI评分Prompt更新】
+
+文件：server/services/interviewAnalysisService.js
+
+```javascript
+const SYSTEM_PROMPT = `你是专业AI面试评分员，负责评估候选人软性素质。
+
+问题：{question}
+回答：{answer}
+
+评分维度（每项0-10分）：
+
+【原有维度】
+- relevance: 相关性（回答是否切题）
+- depth: 深度（是否有具体行为细节和反思）
+- clarity: 清晰度（表达是否清晰流畅）
+- professionalism: 专业性（是否展示成熟心态和价值观）
+
+【新增维度】
+- evidence: 证据性（是否有具体数据、案例、成果支撑）
+- actionability: 可执行性（方案是否具体可落地）
+- selfAwareness: 自我认知（是否坦诚面对优劣势）
+- growthMindset: 成长思维（是否展现从失败中学习和持续改进）
+
+评分标准参考：
+8-10分：表现优秀，有具体证据和深刻反思
+5-7分：表现一般，有基本描述但不够深入
+0-4分：表现不足，回避问题或缺乏实质内容
+
+请返回纯JSON（无markdown）：
+{
+  "relevance": 8,
+  "depth": 9,
+  "clarity": 7,
+  "professionalism": 8,
+  "evidence": 7,
+  "actionability": 6,
+  "selfAwareness": 8,
+  "growthMindset": 9,
+  "comment": "一句话评语",
+  "strengths": ["优点1", "优点2"],
+  "concerns": ["关注点1"]
+}`;
+```
+
+【前端展示更新】
+
+文件：client/src/components/CandidateDetailModal/CandidateDetailModal.js
+
+新增8维度雷达图展示：
+
+```javascript
+// 雷达图配置
+const radarConfig = {
+  indicators: [
+    { name: '相关性', max: 10 },
+    { name: '深度', max: 10 },
+    { name: '清晰度', max: 10 },
+    { name: '专业性', max: 10 },
+    { name: '证据性', max: 10 },
+    { name: '可执行性', max: 10 },
+    { name: '自我认知', max: 10 },
+    { name: '成长思维', max: 10 }
+  ]
+};
+```
+
+--------------------------------------------------------------------------------
+1.2 优化关键词评分上下文判断
+--------------------------------------------------------------------------------
+
+【现状分析】
+当前关键词评分过于机械，无上下文判断，导致误判
+
+【改进目标】
+实现智能关键词评分，支持上下文理解、权重区分、否定词识别
+
+【改进方案设计】
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        关键词评分升级方案                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  原有方案                          升级方案                                  │
+│  ┌─────────────┐                  ┌─────────────┐                          │
+│  │ 简单匹配    │        →         │ 智能匹配    │                          │
+│  │ +2/-2固定   │                  │ 权重分级    │                          │
+│  │ 无上下文    │                  │ 上下文理解  │                          │
+│  └─────────────┘                  └─────────────┘                          │
+│                                                                             │
+│  新增能力：                                                                  │
+│  1. 关键词权重分级（强/中/弱）                                               │
+│  2. 上下文窗口分析（前后3个词）                                              │
+│  3. 否定词识别（不会逃避、没有放弃）                                         │
+│  4. 组合词识别（主导负责 > 参与）                                            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【关键词权重分级定义】
+
+```javascript
+// 升级后的关键词评分规则
+this.enhancedKeywordScoring = {
+  iq: {
+    positive: {
+      // 强权重关键词（+3分）
+      strong: {
+        keywords: ['主导', '负责', '架构设计', '核心开发', '技术攻关', '从0到1'],
+        score: 3,
+        description: '体现核心贡献和领导力'
+      },
+      // 中权重关键词（+2分）
+      medium: {
+        keywords: ['实现', '优化', '设计', '部署', '测试', '解决', '方案'],
+        score: 2,
+        description: '体现具体工作内容'
+      },
+      // 弱权重关键词（+1分）
+      weak: {
+        keywords: ['参与', '协助', '配合', '支持'],
+        score: 1,
+        description: '体现参与度但非主导'
+      }
+    },
+    negative: {
+      // 强负面（-3分）
+      strong: {
+        keywords: ['不清楚', '别人做的', '没参与', '不了解'],
+        score: -3,
+        description: '明确表示不知情或未参与'
+      },
+      // 中负面（-2分）
+      medium: {
+        keywords: ['大概', '可能', '好像', '不太记得', '差不多'],
+        score: -2,
+        description: '表述模糊，缺乏确定性'
+      },
+      // 弱负面（-1分）
+      weak: {
+        keywords: ['应该', '感觉', '可能'],
+        score: -1,
+        description: '推测性表述'
+      }
+    }
+  },
+  eq: {
+    positive: {
+      strong: {
+        keywords: ['换位思考', '共情', '理解对方', '双赢', '达成共识'],
+        score: 3
+      },
+      medium: {
+        keywords: ['倾听', '沟通', '体谅', '包容', '反思'],
+        score: 2
+      },
+      weak: {
+        keywords: ['理解', '感受', '考虑'],
+        score: 1
+      }
+    },
+    negative: {
+      strong: {
+        keywords: ['不管', '无所谓', '不在乎', '与我无关'],
+        score: -3
+      },
+      medium: {
+        keywords: ['懒得', '随便', '没必要'],
+        score: -2
+      }
+    }
+  },
+  aq: {
+    positive: {
+      strong: {
+        keywords: ['复盘总结', '持续改进', '突破', '从失败中学到'],
+        score: 3
+      },
+      medium: {
+        keywords: ['调整', '改进', '学习', '克服', '坚持'],
+        score: 2
+      }
+    },
+    negative: {
+      strong: {
+        keywords: ['放弃', '逃避', '没办法', '不可能', '做不到'],
+        score: -3
+      },
+      medium: {
+        keywords: ['抱怨', '太难', '没希望'],
+        score: -2
+      }
+    }
+  },
+  mq: {
+    positive: {
+      strong: {
+        keywords: ['坚持原则', '主动担责', '坦诚沟通', '合规底线'],
+        score: 3
+      },
+      medium: {
+        keywords: ['原则', '合规', '诚信', '责任', '透明'],
+        score: 2
+      }
+    },
+    negative: {
+      strong: {
+        keywords: ['隐瞒', '欺骗', '违规', '侥幸'],
+        score: -3
+      },
+      medium: {
+        keywords: ['敷衍', '推诿', '打擦边球'],
+        score: -2
+      }
+    }
+  }
+};
+```
+
+【否定词识别规则】
+
+```javascript
+// 否定词列表
+const NEGATION_WORDS = ['不', '没有', '未', '无', '不会', '不能', '并非', '不是'];
+
+// 上下文窗口大小
+const CONTEXT_WINDOW = 3;
+
+/**
+ * 检查关键词是否被否定
+ * @param {string} text - 原始文本
+ * @param {number} keywordIndex - 关键词在文本中的位置
+ * @returns {boolean} 是否被否定
+ */
+function isKeywordNegated(text, keywordIndex) {
+  // 获取关键词前3个词的上下文
+  const wordsBefore = text.substring(0, keywordIndex).split(/\s+/).slice(-CONTEXT_WINDOW);
+
+  // 检查是否存在否定词
+  for (const word of wordsBefore) {
+    if (NEGATION_WORDS.some(neg => word.includes(neg))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * 智能关键词评分
+ * @param {string} text - 回答文本
+ * @param {string} dimension - 维度（iq/eq/aq/mq）
+ * @returns {object} 评分结果
+ */
+function smartKeywordScoring(text, dimension) {
+  const rules = this.enhancedKeywordScoring[dimension];
+  let totalScore = 0;
+  const details = [];
+
+  // 遍历所有关键词
+  ['strong', 'medium', 'weak'].forEach(weight => {
+    const positiveKeywords = rules.positive[weight]?.keywords || [];
+    const negativeKeywords = rules.negative[weight]?.keywords || [];
+
+    positiveKeywords.forEach(keyword => {
+      const regex = new RegExp(keyword, 'g');
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        // 检查是否被否定
+        if (!isKeywordNegated(text, match.index)) {
+          const score = rules.positive[weight].score;
+          totalScore += score;
+          details.push({
+            keyword,
+            polarity: 'positive',
+            weight,
+            score,
+            negated: false
+          });
+        } else {
+          details.push({
+            keyword,
+            polarity: 'positive',
+            weight,
+            score: 0,
+            negated: true,
+            reason: '被否定词修饰'
+          });
+        }
+      }
+    });
+
+    negativeKeywords.forEach(keyword => {
+      const regex = new RegExp(keyword, 'g');
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        // 检查是否被否定（否定负面词 = 正面）
+        if (!isKeywordNegated(text, match.index)) {
+          const score = rules.negative[weight].score;
+          totalScore += score;
+          details.push({
+            keyword,
+            polarity: 'negative',
+            weight,
+            score,
+            negated: false
+          });
+        } else {
+          // "不会放弃" = 正面
+          const positiveScore = Math.abs(rules.negative[weight].score);
+          totalScore += positiveScore;
+          details.push({
+            keyword,
+            polarity: 'negative',
+            weight,
+            score: positiveScore,
+            negated: true,
+            reason: '否定负面词转为正面'
+          });
+        }
+      }
+    });
+  });
+
+  // 限制总分范围
+  totalScore = Math.max(-5, Math.min(5, totalScore));
+
+  return { totalScore, details };
+}
+```
+
+【组合词识别规则】
+
+```javascript
+// 组合词规则：检测关键词组合的额外加分
+const COMBINATION_RULES = {
+  iq: [
+    {
+      pattern: ['主导', '负责'],
+      bonus: 2,
+      description: '主导+负责 = 核心贡献'
+    },
+    {
+      pattern: ['设计', '实现', '优化'],
+      bonus: 2,
+      description: '设计+实现+优化 = 全流程参与'
+    },
+    {
+      pattern: ['数据', '提升', '%'],
+      bonus: 3,
+      description: '数据+提升+% = 量化成果'
+    }
+  ],
+  eq: [
+    {
+      pattern: ['倾听', '理解', '共识'],
+      bonus: 2,
+      description: '倾听+理解+共识 = 有效沟通'
+    }
+  ],
+  aq: [
+    {
+      pattern: ['失败', '复盘', '改进'],
+      bonus: 3,
+      description: '失败+复盘+改进 = 成长型思维'
+    }
+  ],
+  mq: [
+    {
+      pattern: ['原则', '坚持', '底线'],
+      bonus: 2,
+      description: '原则+坚持+底线 = 职业操守'
+    }
+  ]
+};
+
+/**
+ * 检测组合词加分
+ */
+function detectCombinations(text, dimension) {
+  const rules = COMBINATION_RULES[dimension] || [];
+  let bonusScore = 0;
+  const matchedCombinations = [];
+
+  rules.forEach(rule => {
+    const allPresent = rule.pattern.every(keyword => text.includes(keyword));
+    if (allPresent) {
+      bonusScore += rule.bonus;
+      matchedCombinations.push({
+        pattern: rule.pattern,
+        bonus: rule.bonus,
+        description: rule.description
+      });
+    }
+  });
+
+  return { bonusScore, matchedCombinations };
+}
+```
+
+================================================================================
+二、P1优先级改进方案
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1 增加题目难度分级机制
+--------------------------------------------------------------------------------
+
+【现状分析】
+当前所有候选人使用相同难度的12道题目，无法区分不同级别岗位的考察需求
+
+【改进目标】
+实现4级题目难度体系，根据岗位级别自动匹配题目难度
+
+【难度分级设计】
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          题目难度分级体系                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Level 1: 初级（Junior）                                                    │
+│  ├── 适用岗位：实习生、应届生、初级工程师                                    │
+│  ├── 题目特点：基础概念、标准流程、常见情境                                  │
+│  ├── IQ考察：基础知识掌握、学习能力                                         │
+│  └── 预期回答：能说清基本概念，有学习意愿                                    │
+│                                                                             │
+│  Level 2: 中级（Mid-level）                                                 │
+│  ├── 适用岗位：中级工程师、资深专员                                         │
+│  ├── 题目特点：实际应用、问题解决、团队协作                                  │
+│  ├── IQ考察：独立完成任务、解决常见问题                                     │
+│  └── 预期回答：有具体案例，能说明解决思路                                   │
+│                                                                             │
+│  Level 3: 高级（Senior）                                                    │
+│  ├── 适用岗位：高级工程师、技术专家、团队Lead                               │
+│  ├── 题目特点：复杂问题、架构设计、技术决策                                  │
+│  ├── IQ考察：技术深度、架构能力、技术影响力                                 │
+│  └── 预期回答：有深度技术分析，能权衡利弊                                   │
+│                                                                             │
+│  Level 4: 专家（Expert/Principal）                                          │
+│  ├── 适用岗位：架构师、技术总监、部门负责人                                 │
+│  ├── 题目特点：战略思考、技术规划、组织影响                                  │
+│  ├── IQ考察：技术视野、战略规划、组织能力                                   │
+│  └── 预期回答：有战略高度，能推动组织变革                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【各难度题目示例】
+
+IQ维度 - Q1 专业知识深度考察：
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Level 1 (初级)                                                              │
+│ 问题：请介绍一下你掌握的Java基础知识，以及你是如何学习这些知识的？           │
+│ 预期回答：能列举基本概念（面向对象、集合、异常处理），说明学习途径          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Level 2 (中级)                                                              │
+│ 问题：请描述你在项目中遇到的一个技术难题，你是如何分析和解决的？            │
+│ 预期回答：有具体问题场景，能说明分析过程和解决方案                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Level 3 (高级)                                                              │
+│ 问题：请分享一次你主导的技术架构优化经历，包括背景、方案和效果？            │
+│ 预期回答：有架构层面的思考，能说明技术选型的权衡和优化效果                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Level 4 (专家)                                                              │
+│ 问题：请描述你如何制定团队的技术战略和技术演进路线？                         │
+│ 预期回答：有战略视野，能说明技术规划与业务目标的结合                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+EQ维度 - Q4 冲突处理与情绪认知：
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Level 1 (初级)                                                              │
+│ 问题：在团队合作中，你遇到过意见不一致的情况吗？你是怎么处理的？            │
+│ 预期回答：能描述基本情境，有沟通解决的意识                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Level 2 (中级)                                                              │
+│ 问题：请分享一次你与同事产生分歧的经历，你是如何化解并达成共识的？          │
+│ 预期回答：有具体冲突场景，能说明沟通策略和结果                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Level 3 (高级)                                                              │
+│ 问题：作为技术负责人，你如何处理团队内部的技术路线分歧？                     │
+│ 预期回答：能平衡技术因素和团队关系，推动共识达成                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Level 4 (专家)                                                              │
+│ 问题：请描述一次你推动跨部门协作变革的经历，遇到了哪些阻力，如何化解？      │
+│ 预期回答：有组织层面的影响力，能推动跨团队协作                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【代码实现方案】
+
+```javascript
+// 难度等级配置
+const DIFFICULTY_LEVELS = {
+  JUNIOR: {
+    level: 1,
+    name: '初级',
+    description: '实习生、应届生、初级工程师',
+    iqWeight: 0.4,  // IQ权重相对较低
+    eqWeight: 0.25,
+    aqWeight: 0.2,
+    mqWeight: 0.15,
+    questionCount: 8,  // 题目数量较少
+    depthRequirement: 'basic'  // 深度要求：基础
+  },
+  MID_LEVEL: {
+    level: 2,
+    name: '中级',
+    description: '中级工程师、资深专员',
+    iqWeight: 0.5,
+    eqWeight: 0.2,
+    aqWeight: 0.18,
+    mqWeight: 0.12,
+    questionCount: 10,
+    depthRequirement: 'intermediate'
+  },
+  SENIOR: {
+    level: 3,
+    name: '高级',
+    description: '高级工程师、技术专家、团队Lead',
+    iqWeight: 0.55,
+    eqWeight: 0.18,
+    aqWeight: 0.15,
+    mqWeight: 0.12,
+    questionCount: 12,
+    depthRequirement: 'advanced'
+  },
+  EXPERT: {
+    level: 4,
+    name: '专家',
+    description: '架构师、技术总监、部门负责人',
+    iqWeight: 0.5,
+    eqWeight: 0.2,
+    aqWeight: 0.15,
+    mqWeight: 0.15,
+    questionCount: 12,
+    depthRequirement: 'expert'
+  }
+};
+
+// 根据岗位自动匹配难度等级
+function determineDifficultyLevel(position, experience) {
+  // 根据岗位名称关键词判断
+  const positionLower = position.toLowerCase();
+
+  // 专家级关键词
+  if (/(架构师|总监|vp|首席|principal|distinguished)/i.test(positionLower)) {
+    return DIFFICULTY_LEVELS.EXPERT;
+  }
+
+  // 高级关键词
+  if (/(高级|资深|senior|lead|专家|principal)/i.test(positionLower)) {
+    return DIFFICULTY_LEVELS.SENIOR;
+  }
+
+  // 中级关键词
+  if (/(中级|mid|资深)/i.test(positionLower)) {
+    return DIFFICULTY_LEVELS.MID_LEVEL;
+  }
+
+  // 初级关键词
+  if (/(初级|实习|应届|junior|intern)/i.test(positionLower)) {
+    return DIFFICULTY_LEVELS.JUNIOR;
+  }
+
+  // 根据工作年限判断
+  if (experience) {
+    const years = parseInt(experience);
+    if (years >= 8) return DIFFICULTY_LEVELS.EXPERT;
+    if (years >= 5) return DIFFICULTY_LEVELS.SENIOR;
+    if (years >= 2) return DIFFICULTY_LEVELS.MID_LEVEL;
+    return DIFFICULTY_LEVELS.JUNIOR;
+  }
+
+  // 默认中级
+  return DIFFICULTY_LEVELS.MID_LEVEL;
+}
+
+// 根据难度等级生成问题Prompt
+function buildDifficultyAwarePrompt(dimension, questionIndex, difficultyLevel, resumeText, positionInfo) {
+  const basePrompt = this.buildDimensionQuestionPrompt(dimension, questionIndex, resumeText, positionInfo);
+
+  // 根据难度等级添加额外指令
+  const difficultyInstructions = {
+    JUNIOR: `
+【初级难度指令】
+- 问题应聚焦基础概念和标准流程
+- 可以接受理论性回答
+- 重点考察学习态度和基础知识掌握
+- 避免过于复杂的情境`,
+
+    MID_LEVEL: `
+【中级难度指令】
+- 问题应结合实际工作场景
+- 要求有具体案例和解决思路
+- 重点考察独立解决问题的能力
+- 避免过于抽象的理论问题`,
+
+    SENIOR: `
+【高级难度指令】
+- 问题应涉及架构设计或技术决策
+- 要求有深度分析和权衡考量
+- 重点考察技术深度和影响力
+- 追问技术选型的利弊分析`,
+
+    EXPERT: `
+【专家难度指令】
+- 问题应涉及战略规划和组织影响
+- 要求有跨团队/跨部门的影响力案例
+- 重点考察技术视野和领导力
+- 追问如何推动组织变革`
+  };
+
+  return basePrompt + '\n' + difficultyInstructions[difficultyLevel];
+}
+```
+
+--------------------------------------------------------------------------------
+2.2 增加岗位权重配置功能
+--------------------------------------------------------------------------------
+
+【现状分析】
+当前IQ/EQ/AQ/MQ权重固定为50%/20%/15%/15%，无法根据岗位特性调整
+
+【改进目标】
+实现岗位权重配置功能，支持HR自定义或使用预设模板
+
+【预设权重模板】
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          岗位权重配置模板                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  岗位类型          IQ      EQ      AQ      MQ      说明                     │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  技术研发岗        60%     15%     15%     10%     技术能力优先             │
+│  前端开发岗        55%     20%     15%     10%     技术与协作并重           │
+│  后端开发岗        60%     15%     15%     10%     技术深度优先             │
+│  算法工程师        65%     10%     15%     10%     技术深度最高             │
+│  测试工程师        50%     20%     20%     10%     细心与抗压               │
+│  运维工程师        50%     20%     20%     10%     抗压与协作               │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  产品经理          40%     30%     20%     10%     沟通与思维并重           │
+│  产品运营          35%     35%     20%     10%     沟通能力优先             │
+│  UI/UX设计         45%     25%     20%     10%     创意与协作               │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  销售代表          30%     40%     20%     10%     情商优先                 │
+│  销售经理          30%     35%     20%     15%     情商与德商               │
+│  客户成功          30%     40%     20%     10%     服务意识优先             │
+│  商务拓展          30%     40%     20%     10%     社交能力优先             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  项目经理          35%     30%     20%     15%     综合能力均衡             │
+│  技术经理          45%     25%     20%     10%     技术与团队               │
+│  部门总监          40%     25%     20%     15%     战略与领导力             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  财务会计          45%     15%     15%     25%     德商权重最高             │
+│  审计专员          40%     15%     15%     30%     合规意识优先             │
+│  法务专员          35%     20%     15%     30%     职业操守优先             │
+│  合规专员          35%     15%     15%     35%     德商最高权重             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  HR专员            35%     35%     20%     10%     沟通与服务               │
+│  HRBP              35%     35%     20%     10%     业务伙伴思维             │
+│  招聘专员          30%     40%     20%     10%     沟通能力优先             │
+│  ─────────────────────────────────────────────────────────────────────────  │
+│  行政专员          30%     40%     20%     10%     服务意识优先             │
+│  采购专员          35%     30%     20%     15%     谈判与诚信               │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【代码实现方案】
+
+```javascript
+// 岗位权重配置服务
+class PositionWeightService {
+  constructor() {
+    // 预设权重模板
+    this.weightTemplates = {
+      // 技术类
+      'tech_dev': { iq: 60, eq: 15, aq: 15, mq: 10, name: '技术研发岗' },
+      'tech_frontend': { iq: 55, eq: 20, aq: 15, mq: 10, name: '前端开发岗' },
+      'tech_backend': { iq: 60, eq: 15, aq: 15, mq: 10, name: '后端开发岗' },
+      'tech_algorithm': { iq: 65, eq: 10, aq: 15, mq: 10, name: '算法工程师' },
+      'tech_qa': { iq: 50, eq: 20, aq: 20, mq: 10, name: '测试工程师' },
+      'tech_ops': { iq: 50, eq: 20, aq: 20, mq: 10, name: '运维工程师' },
+
+      // 产品设计类
+      'product_manager': { iq: 40, eq: 30, aq: 20, mq: 10, name: '产品经理' },
+      'product_ops': { iq: 35, eq: 35, aq: 20, mq: 10, name: '产品运营' },
+      'design_ui': { iq: 45, eq: 25, aq: 20, mq: 10, name: 'UI/UX设计' },
+
+      // 销售客服类
+      'sales_rep': { iq: 30, eq: 40, aq: 20, mq: 10, name: '销售代表' },
+      'sales_manager': { iq: 30, eq: 35, aq: 20, mq: 15, name: '销售经理' },
+      'customer_success': { iq: 30, eq: 40, aq: 20, mq: 10, name: '客户成功' },
+      'bd': { iq: 30, eq: 40, aq: 20, mq: 10, name: '商务拓展' },
+
+      // 管理类
+      'project_manager': { iq: 35, eq: 30, aq: 20, mq: 15, name: '项目经理' },
+      'tech_manager': { iq: 45, eq: 25, aq: 20, mq: 10, name: '技术经理' },
+      'director': { iq: 40, eq: 25, aq: 20, mq: 15, name: '部门总监' },
+
+      // 财务法务类
+      'finance': { iq: 45, eq: 15, aq: 15, mq: 25, name: '财务会计' },
+      'audit': { iq: 40, eq: 15, aq: 15, mq: 30, name: '审计专员' },
+      'legal': { iq: 35, eq: 20, aq: 15, mq: 30, name: '法务专员' },
+      'compliance': { iq: 35, eq: 15, aq: 15, mq: 35, name: '合规专员' },
+
+      // 人力行政类
+      'hr': { iq: 35, eq: 35, aq: 20, mq: 10, name: 'HR专员' },
+      'hrbp': { iq: 35, eq: 35, aq: 20, mq: 10, name: 'HRBP' },
+      'recruiter': { iq: 30, eq: 40, aq: 20, mq: 10, name: '招聘专员' },
+      'admin': { iq: 30, eq: 40, aq: 20, mq: 10, name: '行政专员' },
+      'procurement': { iq: 35, eq: 30, aq: 20, mq: 15, name: '采购专员' },
+
+      // 默认
+      'default': { iq: 50, eq: 20, aq: 15, mq: 15, name: '通用岗位' }
+    };
+
+    // 岗位关键词映射
+    this.positionKeywords = {
+      'tech_dev': ['开发', '工程师', 'developer', 'engineer', '程序员'],
+      'tech_frontend': ['前端', 'frontend', 'react', 'vue', 'web开发'],
+      'tech_backend': ['后端', 'backend', 'java', 'python', 'go', 'node'],
+      'tech_algorithm': ['算法', 'algorithm', 'ai', '机器学习', '深度学习'],
+      'tech_qa': ['测试', 'qa', 'quality', '测试工程师'],
+      'tech_ops': ['运维', 'ops', 'devops', 'sre', '运维工程师'],
+      'product_manager': ['产品经理', 'product manager', 'pm'],
+      'product_ops': ['运营', 'operation', '产品运营'],
+      'design_ui': ['设计', 'design', 'ui', 'ux', '视觉'],
+      'sales_rep': ['销售', 'sales', '业务员', '销售代表'],
+      'sales_manager': ['销售经理', 'sales manager'],
+      'customer_success': ['客户成功', 'customer success', 'cs'],
+      'bd': ['商务', 'bd', '商务拓展', 'business'],
+      'project_manager': ['项目经理', 'project manager', 'pm'],
+      'tech_manager': ['技术经理', '技术负责人', 'tech lead', 'tech manager'],
+      'director': ['总监', 'director', 'vp', '负责人'],
+      'finance': ['财务', 'finance', '会计', 'accounting'],
+      'audit': ['审计', 'audit'],
+      'legal': ['法务', 'legal', '律师'],
+      'compliance': ['合规', 'compliance'],
+      'hr': ['hr', '人事', '人力资源'],
+      'hrbp': ['hrbp', '业务伙伴'],
+      'recruiter': ['招聘', 'recruiter', 'recruitment'],
+      'admin': ['行政', 'admin', '助理'],
+      'procurement': ['采购', 'procurement', 'purchasing']
+    };
+  }
+
+  /**
+   * 根据岗位名称自动匹配权重模板
+   */
+  matchWeightTemplate(positionName) {
+    const positionLower = positionName.toLowerCase();
+
+    for (const [templateKey, keywords] of Object.entries(this.positionKeywords)) {
+      if (keywords.some(kw => positionLower.includes(kw.toLowerCase()))) {
+        return {
+          templateKey,
+          ...this.weightTemplates[templateKey]
+        };
+      }
+    }
+
+    return {
+      templateKey: 'default',
+      ...this.weightTemplates['default']
+    };
+  }
+
+  /**
+   * 获取自定义权重配置
+   */
+  getCustomWeights(positionId) {
+    // 从数据库获取自定义配置
+    // TODO: 实现数据库查询
+    return null;
+  }
+
+  /**
+   * 保存自定义权重配置
+   */
+  saveCustomWeights(positionId, weights) {
+    // 验证权重总和为100
+    const total = weights.iq + weights.eq + weights.aq + weights.mq;
+    if (total !== 100) {
+      throw new Error('权重总和必须为100%');
+    }
+
+    // 保存到数据库
+    // TODO: 实现数据库保存
+  }
+
+  /**
+   * 计算加权总分
+   */
+  calculateWeightedScore(categoryScores, weights) {
+    const { iq, eq, aq, mq } = weights;
+
+    const iqScore = (categoryScores.iq?.rawScore || 0) / 10 * iq;
+    const eqScore = (categoryScores.eq?.rawScore || 0) / 10 * eq;
+    const aqScore = (categoryScores.aq?.rawScore || 0) / 10 * aq;
+    const mqScore = (categoryScores.mq?.rawScore || 0) / 10 * mq;
+
+    return Math.round((iqScore + eqScore + aqScore + mqScore) * 10) / 10;
+  }
+}
+```
+
+【前端配置界面设计】
+
+```javascript
+// 岗位权重配置组件
+const PositionWeightConfig = ({ position, onSave }) => {
+  const [weights, setWeights] = useState({
+    iq: 50, eq: 20, aq: 15, mq: 15
+  });
+
+  // 预设模板选择
+  const templates = [
+    { key: 'tech_dev', name: '技术研发岗', iq: 60, eq: 15, aq: 15, mq: 10 },
+    { key: 'product_manager', name: '产品经理', iq: 40, eq: 30, aq: 20, mq: 10 },
+    { key: 'sales_rep', name: '销售代表', iq: 30, eq: 40, aq: 20, mq: 10 },
+    { key: 'finance', name: '财务会计', iq: 45, eq: 15, aq: 15, mq: 25 },
+    // ... 更多模板
+  ];
+
+  return (
+    <div className="weight-config">
+      <h3>岗位权重配置</h3>
+
+      {/* 预设模板选择 */}
+      <div className="template-selector">
+        <label>选择预设模板：</label>
+        <Select onChange={handleTemplateSelect}>
+          {templates.map(t => (
+            <Option key={t.key} value={t.key}>{t.name}</Option>
+          ))}
+        </Select>
+      </div>
+
+      {/* 自定义权重滑块 */}
+      <div className="weight-sliders">
+        <Slider label="IQ 智商" value={weights.iq} onChange={v => setWeights({...weights, iq: v})} />
+        <Slider label="EQ 情商" value={weights.eq} onChange={v => setWeights({...weights, eq: v})} />
+        <Slider label="AQ 逆商" value={weights.aq} onChange={v => setWeights({...weights, aq: v})} />
+        <Slider label="MQ 德商" value={weights.mq} onChange={v => setWeights({...weights, mq: v})} />
+      </div>
+
+      {/* 权重预览 */}
+      <div className="weight-preview">
+        <PieChart data={[
+          { name: 'IQ', value: weights.iq },
+          { name: 'EQ', value: weights.eq },
+          { name: 'AQ', value: weights.aq },
+          { name: 'MQ', value: weights.mq }
+        ]} />
+        <div className="total">权重总和：{weights.iq + weights.eq + weights.aq + weights.mq}%</div>
+      </div>
+
+      <Button onClick={() => onSave(weights)}>保存配置</Button>
+    </div>
+  );
+};
+```
+
+--------------------------------------------------------------------------------
+2.3 增加负面回答识别机制
+--------------------------------------------------------------------------------
+
+【现状分析】
+当前系统无法识别套话回答、回避性回答、过度包装等负面回答类型
+
+【改进目标】
+实现5类负面回答的自动识别和预警
+
+【负面回答类型定义】
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          负面回答识别体系                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  类型1：套话回答                                                            │
+│  ├── 定义：使用通用、空泛的描述，缺乏具体内容                               │
+│  ├── 示例："我性格开朗，善于沟通，工作认真负责"                             │
+│  ├── 识别特征：                                                             │
+│  │   - 高频套话词汇密集出现                                                 │
+│  │   - 无具体案例或数据支撑                                                 │
+│  │   - 回答长度短且结构单一                                                 │
+│  └── 处理：标记预警，建议追问具体案例                                       │
+│                                                                             │
+│  类型2：回避性回答                                                          │
+│  ├── 定义：绕开问题核心，转移话题或模糊处理                                 │
+│  ├── 示例："这个情况比较复杂，涉及到很多因素..."                            │
+│  ├── 识别特征：                                                             │
+│  │   - 问题关键词未在回答中出现                                             │
+│  │   - 大量使用模糊限定词                                                   │
+│  │   - 回答内容与问题关联度低                                               │
+│  └── 处理：标记预警，建议重新提问                                           │
+│                                                                             │
+│  类型3：过度包装                                                            │
+│  ├── 定义：夸大成果，隐瞒失败，美化经历                                     │
+│  ├── 示例："我主导了整个项目，从0到1完成了..."（实际只是参与者）            │
+│  ├── 识别特征：                                                             │
+│  │   - 过多使用"主导"、"负责"等强权重词                                    │
+│  │   - 成果描述与简历经历不符                                               │
+│  │   - 缺乏失败经历或不足描述                                               │
+│  └── 处理：标记预警，建议追问验证细节                                       │
+│                                                                             │
+│  类型4：矛盾回答                                                            │
+│  ├── 定义：前后回答不一致，逻辑自相矛盾                                     │
+│  ├── 示例：Q1说"我主导了项目"，Q2说"我参与了部分工作"                       │
+│  ├── 识别特征：                                                             │
+│  │   - 同一主题的回答内容冲突                                               │
+│  │   - 时间线或数据不一致                                                   │
+│  │   - 角色定位前后矛盾                                                     │
+│  └── 处理：标记预警，列出矛盾点供HR核实                                     │
+│                                                                             │
+│  类型5：准备痕迹过重                                                        │
+│  ├── 定义：背诵标准答案，缺乏真实思考                                       │
+│  ├── 示例：回答过于流畅，使用标准面试话术模板                               │
+│  ├── 识别特征：                                                             │
+│  │   - 回答结构过于完美（总-分-总）                                         │
+│  │   - 使用大量面试"标准答案"词汇                                          │
+│  │   - 追问时无法深入展开                                                   │
+│  └── 处理：标记预警，建议使用情境追问验证                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【代码实现方案】
+
+```javascript
+// 负面回答识别服务
+class NegativeAnswerDetector {
+  constructor() {
+    // 套话词库
+    this.clichePhrases = [
+      '性格开朗', '善于沟通', '工作认真', '责任心强', '团队精神',
+      '学习能力', '积极向上', '吃苦耐劳', '踏实肯干', '有亲和力',
+      '执行力强', '抗压能力强', '善于总结', '逻辑清晰', '思维敏捷'
+    ];
+
+    // 回避性词汇
+    this.evasivePhrases = [
+      '这个情况比较复杂', '涉及到很多因素', '不太好说', '因人而异',
+      '看具体情况', '很难一概而论', '需要具体分析', '取决于'
+    ];
+
+    // 过度包装指标
+    this.overPackagingIndicators = {
+      strongClaimWords: ['主导', '负责', '核心', '关键', '唯一', '首创'],
+      perfectOutcomeWords: ['完美', '零缺陷', '100%', '全部', '完全'],
+      lackOfFailurePhrases: ['没有遇到什么困难', '一切顺利', '没有失败']
+    };
+
+    // 准备痕迹指标
+    this.preparationIndicators = {
+      perfectStructure: ['首先', '其次', '再次', '最后', '总之'],
+      standardPhrases: [
+        '我认为这个问题可以从以下几个方面来回答',
+        '综上所述，我的观点是',
+        '这是一个很好的问题'
+      ]
+    };
+  }
+
+  /**
+   * 综合检测负面回答
+   */
+  detect(answer, question, previousAnswers = []) {
+    const results = [];
+
+    // 1. 检测套话回答
+    const clicheResult = this.detectCliche(answer);
+    if (clicheResult.detected) {
+      results.push({
+        type: 'cliche',
+        severity: clicheResult.severity,
+        description: '检测到套话回答',
+        details: clicheResult.details,
+        suggestion: '建议追问具体案例'
+      });
+    }
+
+    // 2. 检测回避性回答
+    const evasiveResult = this.detectEvasive(answer, question);
+    if (evasiveResult.detected) {
+      results.push({
+        type: 'evasive',
+        severity: evasiveResult.severity,
+        description: '检测到回避性回答',
+        details: evasiveResult.details,
+        suggestion: '建议重新提问或追问细节'
+      });
+    }
+
+    // 3. 检测过度包装
+    const packagingResult = this.detectOverPackaging(answer);
+    if (packagingResult.detected) {
+      results.push({
+        type: 'overPackaging',
+        severity: packagingResult.severity,
+        description: '检测到可能的过度包装',
+        details: packagingResult.details,
+        suggestion: '建议追问验证细节'
+      });
+    }
+
+    // 4. 检测矛盾回答
+    if (previousAnswers.length > 0) {
+      const contradictionResult = this.detectContradiction(answer, previousAnswers);
+      if (contradictionResult.detected) {
+        results.push({
+          type: 'contradiction',
+          severity: contradictionResult.severity,
+          description: '检测到前后矛盾',
+          details: contradictionResult.details,
+          suggestion: '建议核实矛盾点'
+        });
+      }
+    }
+
+    // 5. 检测准备痕迹
+    const preparationResult = this.detectPreparation(answer);
+    if (preparationResult.detected) {
+      results.push({
+        type: 'preparation',
+        severity: preparationResult.severity,
+        description: '检测到准备痕迹过重',
+        details: preparationResult.details,
+        suggestion: '建议使用情境追问验证真实性'
+      });
+    }
+
+    return {
+      hasNegativeIndicators: results.length > 0,
+      overallSeverity: this.calculateOverallSeverity(results),
+      indicators: results
+    };
+  }
+
+  /**
+   * 检测套话回答
+   */
+  detectCliche(answer) {
+    const matches = [];
+    let clicheCount = 0;
+
+    this.clichePhrases.forEach(phrase => {
+      if (answer.includes(phrase)) {
+        clicheCount++;
+        matches.push(phrase);
+      }
+    });
+
+    // 套话密度计算
+    const answerLength = answer.length;
+    const clicheDensity = clicheCount / (answerLength / 50); // 每50字出现套话的频率
+
+    // 判断严重程度
+    let severity = 'none';
+    if (clicheCount >= 3 && clicheDensity > 0.3) {
+      severity = 'high';
+    } else if (clicheCount >= 2 && clicheDensity > 0.2) {
+      severity = 'medium';
+    } else if (clicheCount >= 1) {
+      severity = 'low';
+    }
+
+    return {
+      detected: clicheCount >= 2,
+      severity,
+      details: {
+        clicheCount,
+        matchedPhrases: matches,
+        clicheDensity: clicheDensity.toFixed(2)
+      }
+    };
+  }
+
+  /**
+   * 检测回避性回答
+   */
+  detectEvasive(answer, question) {
+    // 提取问题关键词
+    const questionKeywords = this.extractKeywords(question);
+
+    // 检查回答中是否包含问题关键词
+    let keywordMatchCount = 0;
+    const matchedKeywords = [];
+    const missingKeywords = [];
+
+    questionKeywords.forEach(kw => {
+      if (answer.includes(kw)) {
+        keywordMatchCount++;
+        matchedKeywords.push(kw);
+      } else {
+        missingKeywords.push(kw);
+      }
+    });
+
+    // 检测回避性词汇
+    const evasiveMatches = [];
+    this.evasivePhrases.forEach(phrase => {
+      if (answer.includes(phrase)) {
+        evasiveMatches.push(phrase);
+      }
+    });
+
+    // 计算回避指数
+    const keywordMatchRate = keywordMatchCount / questionKeywords.length;
+    const evasiveScore = evasiveMatches.length * 0.3;
+    const avoidanceIndex = (1 - keywordMatchRate) + evasiveScore;
+
+    // 判断严重程度
+    let severity = 'none';
+    if (avoidanceIndex > 0.7) {
+      severity = 'high';
+    } else if (avoidanceIndex > 0.5) {
+      severity = 'medium';
+    } else if (avoidanceIndex > 0.3) {
+      severity = 'low';
+    }
+
+    return {
+      detected: avoidanceIndex > 0.5,
+      severity,
+      details: {
+        keywordMatchRate: (keywordMatchRate * 100).toFixed(0) + '%',
+        matchedKeywords,
+        missingKeywords,
+        evasivePhrases: evasiveMatches,
+        avoidanceIndex: avoidanceIndex.toFixed(2)
+      }
+    };
+  }
+
+  /**
+   * 检测过度包装
+   */
+  detectOverPackaging(answer) {
+    const indicators = this.overPackagingIndicators;
+
+    // 统计强声明词汇
+    const strongClaims = [];
+    indicators.strongClaimWords.forEach(word => {
+      const regex = new RegExp(word, 'g');
+      const matches = answer.match(regex);
+      if (matches) {
+        strongClaims.push({ word, count: matches.length });
+      }
+    });
+
+    // 统计完美结果词汇
+    const perfectOutcomes = [];
+    indicators.perfectOutcomeWords.forEach(word => {
+      if (answer.includes(word)) {
+        perfectOutcomes.push(word);
+      }
+    });
+
+    // 检测是否缺乏失败描述
+    const hasNoFailure = indicators.lackOfFailurePhrases.some(
+      phrase => answer.includes(phrase)
+    );
+
+    // 计算包装指数
+    const strongClaimScore = strongClaims.reduce((sum, item) => sum + item.count * 2, 0);
+    const perfectScore = perfectOutcomes.length * 3;
+    const noFailureScore = hasNoFailure ? 5 : 0;
+    const packagingIndex = strongClaimScore + perfectScore + noFailureScore;
+
+    // 判断严重程度
+    let severity = 'none';
+    if (packagingIndex > 15) {
+      severity = 'high';
+    } else if (packagingIndex > 10) {
+      severity = 'medium';
+    } else if (packagingIndex > 5) {
+      severity = 'low';
+    }
+
+    return {
+      detected: packagingIndex > 10,
+      severity,
+      details: {
+        strongClaims,
+        perfectOutcomes,
+        hasNoFailure,
+        packagingIndex
+      }
+    };
+  }
+
+  /**
+   * 检测矛盾回答
+   */
+  detectContradiction(currentAnswer, previousAnswers) {
+    // 提取当前回答中的关键声明
+    const currentClaims = this.extractClaims(currentAnswer);
+
+    const contradictions = [];
+
+    // 与之前的回答对比
+    previousAnswers.forEach((prevAnswer, index) => {
+      const prevClaims = this.extractClaims(prevAnswer.answer);
+
+      // 检查角色声明矛盾
+      const roleContradictions = this.checkRoleContradiction(currentClaims, prevClaims);
+      if (roleContradictions) {
+        contradictions.push({
+          questionIndex: index,
+          type: 'role',
+          details: roleContradictions
+        });
+      }
+
+      // 检查数据矛盾
+      const dataContradictions = this.checkDataContradiction(currentClaims, prevClaims);
+      if (dataContradictions) {
+        contradictions.push({
+          questionIndex: index,
+          type: 'data',
+          details: dataContradictions
+        });
+      }
+    });
+
+    // 判断严重程度
+    let severity = 'none';
+    if (contradictions.length >= 2) {
+      severity = 'high';
+    } else if (contradictions.length === 1) {
+      severity = 'medium';
+    }
+
+    return {
+      detected: contradictions.length > 0,
+      severity,
+      details: {
+        contradictionCount: contradictions.length,
+        contradictions
+      }
+    };
+  }
+
+  /**
+   * 检测准备痕迹
+   */
+  detectPreparation(answer) {
+    const indicators = this.preparationIndicators;
+
+    // 检测完美结构
+    let structureScore = 0;
+    const structureMatches = [];
+    indicators.perfectStructure.forEach(word => {
+      if (answer.includes(word)) {
+        structureScore++;
+        structureMatches.push(word);
+      }
+    });
+
+    // 检测标准话术
+    let phraseScore = 0;
+    const phraseMatches = [];
+    indicators.standardPhrases.forEach(phrase => {
+      if (answer.includes(phrase)) {
+        phraseScore++;
+        phraseMatches.push(phrase);
+      }
+    });
+
+    // 计算准备痕迹指数
+    const preparationIndex = structureScore * 2 + phraseScore * 3;
+
+    // 判断严重程度
+    let severity = 'none';
+    if (preparationIndex > 10) {
+      severity = 'high';
+    } else if (preparationIndex > 5) {
+      severity = 'medium';
+    } else if (preparationIndex > 2) {
+      severity = 'low';
+    }
+
+    return {
+      detected: preparationIndex > 5,
+      severity,
+      details: {
+        structureMatches,
+        phraseMatches,
+        preparationIndex
+      }
+    };
+  }
+
+  /**
+   * 计算总体严重程度
+   */
+  calculateOverallSeverity(indicators) {
+    if (indicators.length === 0) return 'none';
+
+    const highCount = indicators.filter(i => i.severity === 'high').length;
+    const mediumCount = indicators.filter(i => i.severity === 'medium').length;
+
+    if (highCount >= 1) return 'high';
+    if (mediumCount >= 2) return 'high';
+    if (mediumCount >= 1) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * 提取关键词
+   */
+  extractKeywords(text) {
+    const stopWords = ['的', '了', '在', '是', '我', '你', '他', '她', '它', '们', '这', '那', '有', '和', '与', '或', '但', '因为', '所以', '如果', '虽然', '但是', '请', '描述', '介绍', '说说', '谈谈'];
+    return text.split(/[，。！？；：\s]+/)
+      .filter(word => word.length > 1 && !stopWords.includes(word))
+      .slice(0, 10);
+  }
+
+  /**
+   * 提取声明
+   */
+  extractClaims(text) {
+    const claims = {
+      roles: [],
+      numbers: [],
+      outcomes: []
+    };
+
+    // 提取角色声明
+    const rolePatterns = ['主导', '负责', '参与', '协助', '独立完成'];
+    rolePatterns.forEach(pattern => {
+      if (text.includes(pattern)) {
+        claims.roles.push(pattern);
+      }
+    });
+
+    // 提取数字声明
+    const numberPattern = /\d+(\.\d+)?(%|万|个|次|年|月|人)?/g;
+    const numbers = text.match(numberPattern) || [];
+    claims.numbers = numbers;
+
+    return claims;
+  }
+
+  /**
+   * 检查角色矛盾
+   */
+  checkRoleContradiction(currentClaims, previousClaims) {
+    const currentRoles = currentClaims.roles;
+    const previousRoles = previousClaims.roles;
+
+    // 检查角色降级（之前说主导，现在说参与）
+    const roleHierarchy = { '主导': 4, '负责': 3, '独立完成': 3, '参与': 2, '协助': 1 };
+
+    if (currentRoles.includes('参与') && previousRoles.includes('主导')) {
+      return {
+        type: 'role_downgrade',
+        previous: '主导',
+        current: '参与',
+        description: '角色定位前后矛盾：之前声称主导，现在说是参与'
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * 检查数据矛盾
+   */
+  checkDataContradiction(currentClaims, previousClaims) {
+    // 简化实现：检查是否有明显不同的数字
+    // 实际实现需要更复杂的语义分析
+    return null;
+  }
+}
+
+module.exports = NegativeAnswerDetector;
+```
+
+================================================================================
+三、P2优先级改进方案
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 增加评分置信度指标
+--------------------------------------------------------------------------------
+
+【改进目标】
+为每个评分增加置信度指标，帮助HR判断评分的可信程度
+
+【置信度计算模型】
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          评分置信度计算模型                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  置信度 = f(回答长度, 关键词密度, 结构完整度, AI模型确定性)                  │
+│                                                                             │
+│  影响因素：                                                                  │
+│                                                                             │
+│  1. 回答长度（权重30%）                                                     │
+│     ├── >200字：高置信度（0.9）                                             │
+│     ├── 100-200字：中置信度（0.7）                                          │
+│     ├── 50-100字：低置信度（0.5）                                           │
+│     └── <50字：极低置信度（0.3）                                            │
+│                                                                             │
+│  2. 关键词密度（权重25%）                                                   │
+│     ├── 高密度（>5个相关关键词）：0.9                                       │
+│     ├── 中密度（2-5个）：0.7                                                │
+│     └── 低密度（<2个）：0.5                                                 │
+│                                                                             │
+│  3. 结构完整度（权重25%）                                                   │
+│     ├── 有编号/逻辑词/总结：0.9                                             │
+│     ├── 部分结构：0.7                                                       │
+│     └── 无结构：0.5                                                         │
+│                                                                             │
+│  4. AI模型确定性（权重20%）                                                 │
+│     ├── 模型返回置信度>0.8：0.9                                            │
+│     ├── 模型返回置信度0.5-0.8：0.7                                         │
+│     └── 模型返回置信度<0.5：0.5                                            │
+│                                                                             │
+│  综合置信度 = Σ(因素得分 × 权重)                                            │
+│                                                                             │
+│  置信度等级：                                                                │
+│  ├── 0.8-1.0：高置信度（绿色）                                              │
+│  ├── 0.6-0.8：中置信度（黄色）                                              │
+│  └── 0-0.6：低置信度（红色）- 建议人工复核                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【代码实现】
+
+```javascript
+/**
+ * 计算评分置信度
+ */
+function calculateConfidence(answer, aiResponse) {
+  // 1. 回答长度置信度（30%）
+  const lengthConfidence = calculateLengthConfidence(answer.length);
+
+  // 2. 关键词密度置信度（25%）
+  const keywordConfidence = calculateKeywordConfidence(answer);
+
+  // 3. 结构完整度置信度（25%）
+  const structureConfidence = calculateStructureConfidence(answer);
+
+  // 4. AI模型确定性（20%）
+  const aiConfidence = aiResponse?.confidence || 0.7;
+
+  // 综合置信度
+  const overallConfidence =
+    lengthConfidence * 0.3 +
+    keywordConfidence * 0.25 +
+    structureConfidence * 0.25 +
+    aiConfidence * 0.2;
+
+  return {
+    overall: Math.round(overallConfidence * 100) / 100,
+    level: getConfidenceLevel(overallConfidence),
+    breakdown: {
+      length: lengthConfidence,
+      keyword: keywordConfidence,
+      structure: structureConfidence,
+      ai: aiConfidence
+    }
+  };
+}
+
+function getConfidenceLevel(confidence) {
+  if (confidence >= 0.8) return { level: 'high', label: '高置信度', color: 'green' };
+  if (confidence >= 0.6) return { level: 'medium', label: '中置信度', color: 'yellow' };
+  return { level: 'low', label: '低置信度', color: 'red', needsReview: true };
+}
+```
+
+--------------------------------------------------------------------------------
+3.2 增加岗位定制化题目库
+--------------------------------------------------------------------------------
+
+【改进目标】
+为不同岗位建立专属题目库，提升面试针对性
+
+【题目库结构设计】
+
+```
+题目库结构
+├── 通用题库
+│   ├── IQ通用题（3题）
+│   ├── EQ通用题（3题）
+│   ├── AQ通用题（3题）
+│   └── MQ通用题（3题）
+│
+├── 技术岗位题库
+│   ├── Java开发
+│   │   ├── IQ专项题（技术深度、并发、JVM、框架原理）
+│   │   ├── EQ情境题（技术评审冲突、需求变更沟通）
+│   │   ├── AQ情境题（项目延期、技术债务处理）
+│   │   └── MQ情境题（代码安全、数据隐私）
+│   ├── 前端开发
+│   ├── Python开发
+│   └── ...
+│
+├── 产品岗位题库
+│   ├── 产品经理
+│   │   ├── IQ专项题（需求分析、数据驱动、竞品分析）
+│   │   ├── EQ情境题（需求冲突、跨部门协作）
+│   │   ├── AQ情境题（产品失败、需求变更）
+│   │   └── MQ情境题（用户隐私、商业伦理）
+│   └── ...
+│
+├── 销售岗位题库
+│   └── ...
+│
+└── 管理岗位题库
+    └── ...
+```
+
+【Java开发岗位题目示例】
+
+```javascript
+const JAVA_DEVELOPER_QUESTIONS = {
+  iq: [
+    {
+      id: 'java_iq_1',
+      category: '技术深度',
+      question: '请详细介绍你在项目中使用过的Java并发工具，遇到过什么问题？',
+      followUpQuestions: [
+        '你提到的这个问题，具体是怎么解决的？',
+        '有没有考虑过其他方案？为什么选择这个方案？'
+      ],
+      evaluationCriteria: {
+        high: '能深入讲解并发原理，有实际踩坑经验',
+        medium: '了解基本用法，能说明常见问题',
+        low: '仅了解概念，缺乏实践经验'
+      }
+    },
+    {
+      id: 'java_iq_2',
+      category: 'JVM调优',
+      question: '请描述一次JVM调优的经历，包括问题现象、分析过程和解决方案。',
+      evaluationCriteria: {
+        high: '能说明GC原理，有实际调优数据和效果',
+        medium: '了解基本调优参数，有简单调优经验',
+        low: '缺乏JVM调优经验'
+      }
+    },
+    {
+      id: 'java_iq_3',
+      category: '框架原理',
+      question: '请选择一个你熟悉的框架（如Spring），介绍其核心原理和你如何深入使用它。',
+      evaluationCriteria: {
+        high: '能讲解核心原理（IOC/AOP），有扩展开发经验',
+        medium: '了解基本原理，能正确使用',
+        low: '仅会使用，不了解原理'
+      }
+    }
+  ],
+  eq: [
+    {
+      id: 'java_eq_1',
+      category: '技术评审冲突',
+      question: '在技术方案评审中，如果其他同事强烈反对你的方案，你会如何处理？',
+      evaluationCriteria: {
+        high: '能客观分析利弊，寻求共识，必要时妥协调整',
+        medium: '能听取意见，但坚持己见或完全妥协',
+        low: '情绪化应对，或拒绝沟通'
+      }
+    }
+  ],
+  aq: [
+    {
+      id: 'java_aq_1',
+      category: '项目延期',
+      question: '如果项目临近上线，发现一个严重的性能问题，你会如何处理？',
+      evaluationCriteria: {
+        high: '快速评估影响，制定多套方案，推动决策',
+        medium: '能提出解决方案，但缺乏紧迫感',
+        low: '等待指示或推卸责任'
+      }
+    }
+  ],
+  mq: [
+    {
+      id: 'java_mq_1',
+      category: '代码安全',
+      question: '如果在代码审查中发现同事的代码存在安全漏洞，但他说"先上线再说"，你会怎么处理？',
+      evaluationCriteria: {
+        high: '坚持安全原则，说明风险，推动修复',
+        medium: '会提出担忧，但可能妥协',
+        low: '随大流，不坚持原则'
+      }
+    }
+  ]
+};
+```
+
+--------------------------------------------------------------------------------
+3.3 增加报告录用建议和风险提示
+--------------------------------------------------------------------------------
+
+【改进目标】
+在面试报告中增加录用建议、风险提示和培养建议
+
+【报告结构升级】
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          面试报告升级结构                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  一、基本信息                                                               │
+│  ├── 候选人姓名、应聘岗位、面试时间                                         │
+│  └── 面试时长、问题数量、回答统计                                           │
+│                                                                             │
+│  二、综合评分（新增置信度）                                                  │
+│  ├── 总分及置信度                                                           │
+│  ├── 四维度得分及雷达图                                                     │
+│  └── 与同岗位候选人对比（新增）                                              │
+│                                                                             │
+│  三、录用建议（新增）                                                        │
+│  ├── 录用等级：强烈推荐 / 推荐 / 待定 / 不推荐                              │
+│  ├── 推荐理由：优势总结                                                      │
+│  ├── 关注事项：需要进一步验证的点                                           │
+│  └── 建议岗位：如果当前岗位不匹配，推荐的其他岗位                            │
+│                                                                             │
+│  四、风险提示（新增）                                                        │
+│  ├── 高风险项：可能影响录用的关键问题                                       │
+│  ├── 中风险项：需要关注但非决定性的问题                                     │
+│  ├── 低风险项：可以在入职后改善的问题                                       │
+│  └── 风险缓解建议：如何降低风险                                              │
+│                                                                             │
+│  五、培养建议（新增）                                                        │
+│  ├── 入职后培训重点                                                         │
+│  ├── 建议导师类型                                                           │
+│  └── 3-6个月发展目标                                                        │
+│                                                                             │
+│  六、面试官辅助信息（新增）                                                  │
+│  ├── 追问建议：HR面试时可追问的方向                                         │
+│  ├── 验证建议：需要进一步验证的事项                                         │
+│  ├── 参考问题：HR面试可使用的补充问题                                       │
+│  └── 背调重点：背景调查需要关注的事项                                       │
+│                                                                             │
+│  七、详细评分记录                                                           │
+│  ├── 每题评分及评语                                                         │
+│  └── 负面回答预警记录                                                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【录用建议生成逻辑】
+
+```javascript
+/**
+ * 生成录用建议
+ */
+function generateHiringRecommendation(scoringResult, negativeIndicators) {
+  const { totalScore, categoryScores } = scoringResult;
+
+  // 录用等级判定
+  let recommendation;
+  let confidence;
+
+  if (totalScore >= 85 && !hasHighRiskIndicators(negativeIndicators)) {
+    recommendation = '强烈推荐';
+    confidence = 'high';
+  } else if (totalScore >= 75) {
+    recommendation = '推荐';
+    confidence = 'medium';
+  } else if (totalScore >= 60) {
+    recommendation = '待定';
+    confidence = 'low';
+  } else {
+    recommendation = '不推荐';
+    confidence = 'high';
+  }
+
+  // 推荐理由
+  const strengths = identifyStrengths(categoryScores);
+
+  // 关注事项
+  const concerns = identifyConcerns(categoryScores, negativeIndicators);
+
+  // 风险评估
+  const risks = assessRisks(categoryScores, negativeIndicators);
+
+  // 培养建议
+  const developmentPlan = generateDevelopmentPlan(categoryScores);
+
+  // HR辅助信息
+  const hrGuidance = generateHRGuidance(scoringResult, negativeIndicators);
+
+  return {
+    recommendation,
+    confidence,
+    strengths,
+    concerns,
+    risks,
+    developmentPlan,
+    hrGuidance
+  };
+}
+
+/**
+ * 风险评估
+ */
+function assessRisks(categoryScores, negativeIndicators) {
+  const risks = {
+    high: [],
+    medium: [],
+    low: []
+  };
+
+  // IQ维度风险
+  if (categoryScores.iq?.percentage < 60) {
+    risks.high.push({
+      dimension: 'IQ',
+      risk: '专业能力不足',
+      impact: '可能无法胜任岗位技术要求',
+      mitigation: '建议安排技术测试进一步验证'
+    });
+  }
+
+  // MQ维度风险
+  if (categoryScores.mq?.percentage < 50) {
+    risks.high.push({
+      dimension: 'MQ',
+      risk: '职业操守存疑',
+      impact: '可能存在合规风险',
+      mitigation: '建议背调重点关注诚信记录'
+    });
+  }
+
+  // 负面回答风险
+  negativeIndicators.forEach(indicator => {
+    if (indicator.type === 'overPackaging' && indicator.severity === 'high') {
+      risks.medium.push({
+        type: 'overPackaging',
+        risk: '简历可能存在过度包装',
+        impact: '实际能力可能与描述不符',
+        mitigation: '建议追问细节验证真实性'
+      });
+    }
+
+    if (indicator.type === 'contradiction') {
+      risks.medium.push({
+        type: 'contradiction',
+        risk: '回答前后矛盾',
+        impact: '诚信度存疑',
+        mitigation: '建议HR面试时重点核实'
+      });
+    }
+  });
+
+  return risks;
+}
+
+/**
+ * 培养建议生成
+ */
+function generateDevelopmentPlan(categoryScores) {
+  const plan = {
+    trainingFocus: [],
+    mentorType: '',
+    developmentGoals: []
+  };
+
+  // 根据短板制定培训重点
+  if (categoryScores.eq?.percentage < 70) {
+    plan.trainingFocus.push({
+      area: '情商提升',
+      courses: ['有效沟通技巧', '情绪管理', '同理心培养'],
+      priority: 'high'
+    });
+  }
+
+  if (categoryScores.aq?.percentage < 70) {
+    plan.trainingFocus.push({
+      area: '抗压能力',
+      courses: ['压力管理', '问题解决思维', '成长型思维'],
+      priority: 'medium'
+    });
+  }
+
+  // 导师类型建议
+  const weaknesses = [];
+  if (categoryScores.iq?.percentage < 70) weaknesses.push('技术');
+  if (categoryScores.eq?.percentage < 70) weaknesses.push('沟通');
+  if (categoryScores.mq?.percentage < 70) weaknesses.push('职业素养');
+
+  if (weaknesses.length > 0) {
+    plan.mentorType = `建议安排${weaknesses.join('、')}能力强的资深员工作为导师`;
+  }
+
+  // 发展目标
+  plan.developmentGoals = [
+    { period: '1-3个月', goal: '熟悉工作流程，掌握基本技能' },
+    { period: '3-6个月', goal: '独立完成任务，开始承担小项目' },
+    { period: '6-12个月', goal: '成为团队骨干，能够指导新人' }
+  ];
+
+  return plan;
+}
+
+/**
+ * HR辅助信息生成
+ */
+function generateHRGuidance(scoringResult, negativeIndicators) {
+  return {
+    followUpQuestions: generateFollowUpQuestions(scoringResult),
+    verificationPoints: generateVerificationPoints(negativeIndicators),
+    referenceQuestions: generateReferenceQuestions(scoringResult),
+    backgroundCheckFocus: generateBackgroundCheckFocus(negativeIndicators)
+  };
+}
+
+/**
+ * 生成追问建议
+ */
+function generateFollowUpQuestions(scoringResult) {
+  const questions = [];
+
+  // 根据评分较低的维度生成追问
+  if (scoringResult.categoryScores.iq?.percentage < 70) {
+    questions.push({
+      dimension: 'IQ',
+      question: '请详细描述你在XX项目中的具体贡献，包括你负责的模块、遇到的难点和解决方案。',
+      purpose: '验证专业能力的真实性'
+    });
+  }
+
+  if (scoringResult.categoryScores.eq?.percentage < 70) {
+    questions.push({
+      dimension: 'EQ',
+      question: '你提到的那次冲突，最后是如何解决的？对方现在和你的关系如何？',
+      purpose: '验证冲突处理能力和人际关系'
+    });
+  }
+
+  return questions;
+}
+
+/**
+ * 生成背调重点
+ */
+function generateBackgroundCheckFocus(negativeIndicators) {
+  const focus = [];
+
+  negativeIndicators.forEach(indicator => {
+    if (indicator.type === 'overPackaging') {
+      focus.push({
+        item: '项目经历核实',
+        method: '联系前公司确认项目参与度和角色',
+        reason: 'AI面试检测到可能的过度包装'
+      });
+    }
+
+    if (indicator.type === 'contradiction') {
+      focus.push({
+        item: '工作表现核实',
+        method: '联系直属上级了解实际工作表现',
+        reason: '面试回答存在前后矛盾'
+      });
+    }
+  });
+
+  return focus;
+}
+```
+
+================================================================================
+四、实施计划
+================================================================================
+
+--------------------------------------------------------------------------------
+阶段一：P0优先级（预计工期：5天）
+--------------------------------------------------------------------------------
+
+  Day 1-2：增加评分维度
+  ├── 修改 interviewScoring.js，新增4个评分维度
+  ├── 更新 AI 评分 Prompt
+  └── 前端展示更新（雷达图扩展）
+
+  Day 3-4：优化关键词评分
+  ├── 实现关键词权重分级
+  ├── 实现上下文窗口分析
+  ├── 实现否定词识别
+  └── 实现组合词识别
+
+  Day 5：测试与调优
+  ├── 单元测试
+  ├── 集成测试
+  └── 评分准确性验证
+
+--------------------------------------------------------------------------------
+阶段二：P1优先级（预计工期：12天）
+--------------------------------------------------------------------------------
+
+  Day 1-5：题目难度分级机制
+  ├── 设计4级难度体系
+  ├── 编写各难度题目模板
+  ├── 实现难度自动匹配逻辑
+  └── 前端难度选择界面
+
+  Day 6-8：岗位权重配置功能
+  ├── 设计权重配置数据结构
+  ├── 实现预设模板匹配
+  ├── 实现自定义配置界面
+  └── 权重配置持久化
+
+  Day 9-12：负面回答识别机制
+  ├── 实现5类负面回答检测算法
+  ├── 集成到评分流程
+  ├── 前端预警展示
+  └── 测试与调优
+
+--------------------------------------------------------------------------------
+阶段三：P2优先级（预计工期：12天）
+--------------------------------------------------------------------------------
+
+  Day 1-2：评分置信度指标
+  ├── 实现置信度计算模型
+  ├── 集成到评分结果
+  └── 前端置信度展示
+
+  Day 3-9：岗位定制化题目库
+  ├── 设计题目库数据结构
+  ├── 编写Java/前端/产品/销售岗位题目
+  ├── 实现题目库管理界面
+  └── 题目库与面试流程集成
+
+  Day 10-12：报告录用建议和风险提示
+  ├── 实现录用建议生成逻辑
+  ├── 实现风险评估模型
+  ├── 实现培养建议生成
+  ├── 实现HR辅助信息生成
+  └── 前端报告展示更新
+
+================================================================================
+文档结束
+================================================================================

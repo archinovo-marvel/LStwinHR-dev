@@ -3,10 +3,20 @@ const crypto = require('crypto');
 
 // In-memory login rate limiter: max 10 attempts per 15 minutes per IP
 const _loginAttempts = new Map();
+let _loginAttemptsSweepTs = 0;
 function checkLoginRateLimit(ip) {
   const now = Date.now();
   const windowMs = 15 * 60 * 1000;
   const maxAttempts = 10;
+
+  // Sweep stale entries at most once per minute to prevent unbounded Map growth
+  if (now - _loginAttemptsSweepTs > 60 * 1000) {
+    _loginAttemptsSweepTs = now;
+    for (const [key, val] of _loginAttempts) {
+      if (now - val.windowStart > windowMs) _loginAttempts.delete(key);
+    }
+  }
+
   let entry = _loginAttempts.get(ip);
   if (!entry || now - entry.windowStart > windowMs) {
     entry = { count: 0, windowStart: now };
@@ -393,7 +403,7 @@ function createAuthRouter({
 
   router.post('/check-duplicate', async (req, res) => {
     try {
-      const { field, value } = req.body;
+      const { field, value, userType } = req.body;
       if (!field || !value) {
         return res.status(400).json({ success: false, message: '缺少检查字段或值' });
       }
@@ -401,27 +411,33 @@ function createAuthRouter({
       if (!trimmedValue) {
         return res.json({ success: true, exists: false });
       }
-      let query = '';
       let fieldName = '';
       switch (field) {
-        case 'userId':
-          query = 'SELECT id FROM User WHERE username = ?';
-          fieldName = '用户名';
-          break;
-        case 'email':
-          query = 'SELECT id FROM User WHERE email = ?';
-          fieldName = '邮箱';
-          break;
-        case 'phone':
-          query = 'SELECT id FROM User WHERE phone = ?';
-          fieldName = '手机号';
-          break;
-        default:
-          return res.status(400).json({ success: false, message: '不支持的检查字段' });
+        case 'userId': fieldName = '用户名'; break;
+        case 'email': fieldName = '邮箱'; break;
+        case 'phone': fieldName = '手机号'; break;
+        default: return res.status(400).json({ success: false, message: '不支持的检查字段' });
       }
-      const [results] = await pool.query(query, [trimmedValue]);
-      if (results.length > 0) {
-        return res.json({ success: true, exists: true, message: `该${fieldName}已被注册` });
+
+      // Check both User (corp) and PersonalUser tables
+      const corpQueries = {
+        userId: 'SELECT id FROM User WHERE username = ?',
+        email: 'SELECT id FROM User WHERE email = ?',
+        phone: 'SELECT id FROM User WHERE phone = ?',
+      };
+      const personalQueries = {
+        userId: 'SELECT id FROM PersonalUser WHERE username = ?',
+        email: 'SELECT id FROM PersonalUser WHERE email = ?',
+      };
+
+      const queries = [corpQueries[field]];
+      if (personalQueries[field]) queries.push(personalQueries[field]);
+
+      for (const query of queries) {
+        const [results] = await pool.query(query, [trimmedValue]);
+        if (results.length > 0) {
+          return res.json({ success: true, exists: true, message: `该${fieldName}已被注册` });
+        }
       }
       res.json({ success: true, exists: false });
     } catch (error) {

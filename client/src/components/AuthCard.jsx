@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Form, Input, Button, Checkbox, message, Spin } from 'antd';
+import { App, Form, Input, Button, Checkbox, Spin } from 'antd';
 import { BankOutlined, UserOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyCertificateOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { colors } from '../theme/colors';
 
@@ -17,7 +17,7 @@ const AuthWrapper = styled.div`
 // ============================================
 // CARD
 // ============================================
-const AuthCard = styled.div`
+const StyledAuthCard = styled.div`
   background: ${colors.surface};
   border-radius: 16px;
   border: 1px solid ${colors.border};
@@ -291,7 +291,12 @@ const AuthCard = ({
   onPersonalRegister,
 }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('corp');
+  const [searchParams] = useSearchParams();
+  const { message } = App.useApp();
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = searchParams.get('tab');
+    return tabParam === 'personal' ? 'personal' : 'corp';
+  });
   const [corpForm] = Form.useForm();
   const [personalForm] = Form.useForm();
 
@@ -427,14 +432,14 @@ const AuthCard = ({
   const handleCorpLogin = async ({ username, password }) => {
     try {
       await onCorpLogin({ email: username, password });
-      message.success('企业账号登录成功');
+      navigate('/dashboard');
     } catch (e) { message.error(e.message || '登录失败'); }
   };
 
   const handlePersonalLogin = async ({ username, password }) => {
     try {
       await onPersonalLogin({ email: username, password });
-      message.success('个人账号登录成功');
+      navigate('/personal/dashboard');
     } catch (e) { message.error(e.message || '登录失败'); }
   };
 
@@ -446,7 +451,7 @@ const AuthCard = ({
     try {
       await onCorpRegister({ userId, phone, email, verificationCode, password });
       message.success('注册成功，请登录');
-      navigate('/login');
+      navigate('/login?tab=corp');
     } catch (e) { message.error(e.message || '注册失败'); }
   };
 
@@ -457,7 +462,7 @@ const AuthCard = ({
     try {
       await onPersonalRegister({ userId, email, verificationCode, password });
       message.success('注册成功，请登录');
-      navigate('/login');
+      navigate('/login?tab=personal');
     } catch (e) { message.error(e.message || '注册失败'); }
   };
 
@@ -468,10 +473,10 @@ const AuthCard = ({
         <IconBadge $variant="corp"><BankOutlined /></IconBadge>
         <StyledForm form={corpForm} onFinish={handleCorpLogin} scrollToFirstError>
           <Form.Item name="username" rules={[{ required: true, message: '请输入用户名!' }]}>
-            <StyledInput prefix={<UserOutlined />} placeholder="用户名 / 邮箱" />
+            <StyledInput name="username" prefix={<UserOutlined />} placeholder="用户名 / 邮箱" />
           </Form.Item>
           <Form.Item name="password" rules={[{ required: true, message: '请输入密码!' }]}>
-            <StyledPassword prefix={<LockOutlined />} placeholder="密码" />
+            <StyledPassword name="password" prefix={<LockOutlined />} placeholder="密码" />
           </Form.Item>
           <Form.Item style={{ marginBottom: 0 }}>
             <SubmitBtn type="primary" htmlType="submit">登录</SubmitBtn>
@@ -750,7 +755,7 @@ const AuthCard = ({
 
   return (
     <AuthWrapper>
-      <AuthCard>
+      <StyledAuthCard>
         <TabBar>
           <Tab $active={activeTab === 'corp'} onClick={() => setActiveTab('corp')}>
             企业账号
@@ -764,7 +769,7 @@ const AuthCard = ({
         {activeTab === 'corp' && mode === 'register' && renderCorpRegister()}
         {activeTab === 'personal' && mode === 'login' && renderPersonalLogin()}
         {activeTab === 'personal' && mode === 'register' && renderPersonalRegister()}
-      </AuthCard>
+      </StyledAuthCard>
     </AuthWrapper>
   );
 };

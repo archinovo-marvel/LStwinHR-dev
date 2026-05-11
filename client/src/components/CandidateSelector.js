@@ -4,12 +4,11 @@ import { UserOutlined, SearchOutlined } from '@ant-design/icons';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import serverDataSync from '../utils/serverDataSync';
+import { colors } from '../theme/colors';
 
 const { Option } = Select;
 const { Search } = Input;
 const { Text } = Typography;
-
-import { colors } from '../theme/colors';
 
 const StyledModal = styled(Modal)`
   .ant-modal-content {

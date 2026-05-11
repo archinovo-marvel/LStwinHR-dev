@@ -1,0 +1,113 @@
+<h2>视觉平衡 - 实现方案对比</h2>
+<p class="subtitle">Flex填充方案（选择C）的具体实现方式</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">方案1：栅格三等分</div>
+    <div class="mockup-body" style="padding: 16px;">
+      <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+        <h4>代码改动</h4>
+        <pre style="background: #f7fafc; padding: 12px; border-radius: 4px; font-size: 13px; overflow: auto;">
+// HomePage.js 第564行
+&lt;Col xs={24} sm={12} lg={<strong>8</strong>} key={index}&gt;
+// 原为 lg={6}，改为 lg={8}
+// 24列栅格，三等分 = 8列/卡片</pre>
+        <div class="pros-cons" style="margin-top: 16px;">
+          <div class="pros">
+            <h4>优点</h4>
+            <ul>
+              <li>简单直接，仅改一个数字</li>
+              <li>保持现有响应式结构</li>
+              <li>三等分精确，无空白</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>缺点</h4>
+            <ul>
+              <li>可能显得"太满"</li>
+              <li>间距固定，无法微调</li>
+              <li>视觉平衡性较弱</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">方案2：Flex视觉平衡（推荐）</div>
+    <div class="mockup-body" style="padding: 16px;">
+      <div style="border: 1px solid #2F80ED; border-radius: 8px; padding: 16px; background: #F0F7FF;">
+        <h4>代码改动</h4>
+        <pre style="background: #e8f2ff; padding: 12px; border-radius: 4px; font-size: 13px; overflow: auto;">
+// 1. 替换Row/Col结构
+&lt;div className="features-container"&gt;
+  {features.map((feature, index) =&gt; (
+    &lt;motion.div className="feature-item"&gt;
+      &lt;FeatureCard ... /&gt;
+    &lt;/motion.div&gt;
+  ))}
+&lt;/div&gt;
+
+// 2. CSS样式
+.features-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.feature-item {
+  flex: 1 1 30%; /* 基础30%，可拉伸 */
+  min-width: 280px;
+  max-width: 400px;
+}</pre>
+        <div class="pros-cons" style="margin-top: 16px;">
+          <div class="pros">
+            <h4>优点</h4>
+            <ul>
+              <li>视觉平衡，可微调比例</li>
+              <li>响应式更灵活</li>
+              <li>间距可控，美观</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>缺点</h4>
+            <ul>
+              <li>改动稍大</li>
+              <li>需新增CSS样式</li>
+              <li>需测试响应式</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>设计建议</h3>
+  <p>基于"视觉平衡"选择，推荐<strong>方案2：Flex视觉平衡</strong>。实现要点：</p>
+  <ol>
+    <li>保持现有卡片组件和动画效果</li>
+    <li>用flex容器替换Ant Design栅格系统</li>
+    <li>设置合适flex比例（如1.2）而非严格三等分</li>
+    <li>保留响应式断点（手机端垂直堆叠）</li>
+    <li>微调间距和最大宽度，避免"太满"</li>
+  </ol>
+
+  <div class="options" style="margin-top: 20px;">
+    <div class="option" data-choice="flex-balance" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>确认Flex方案</h3>
+        <p>采用Flex视觉平衡方案，微调宽度比例，保持美观。</p>
+      </div>
+    </div>
+    <div class="option" data-choice="grid-equal" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>改为栅格三等分</h3>
+        <p>简单改为lg={8}，严格三等分，快速实现。</p>
+      </div>
+    </div>
+  </div>
+</div>

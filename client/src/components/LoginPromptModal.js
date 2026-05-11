@@ -46,7 +46,7 @@ const StyledModal = styled(Modal)`
 `;
 
 const ModalContent = styled.div`
-  background: linear-gradient(135deg, #F0F7FF 0%, #E8F4FD 50%, #F5F0FF 100%);
+  background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 50%, #F8FAFC 100%);
   padding: 40px 32px;
   text-align: center;
   position: relative;
@@ -58,7 +58,7 @@ const ModalContent = styled.div`
     right: -20%;
     width: 200px;
     height: 200px;
-    background: radial-gradient(circle, rgba(47, 128, 237, 0.1) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(37,99,235,0.12) 0%, transparent 70%);
     border-radius: 50%;
   }
   &::after {
@@ -68,7 +68,7 @@ const ModalContent = styled.div`
     left: -10%;
     width: 150px;
     height: 150px;
-    background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 70%);
     border-radius: 50%;
   }
 `;
@@ -78,11 +78,11 @@ const IconWrapper = styled.div`
   height: 80px;
   margin: 0 auto 24px;
   border-radius: 50%;
-  background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.purple} 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(47, 128, 237, 0.3);
+  box-shadow: 0 8px 24px rgba(37,99,235,0.3);
   animation: ${floatAnimation} 3s ease-in-out infinite;
   position: relative;
   z-index: 1;
@@ -125,14 +125,14 @@ const PrimaryButton = styled(Button)`
     border-radius: 12px;
     font-weight: 600;
     font-size: 15px;
-    background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.purple} 100%);
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
     border: none;
-    box-shadow: 0 4px 16px rgba(47, 128, 237, 0.3);
-    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(37,99,235,0.3);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     &:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(47, 128, 237, 0.4);
-      background: linear-gradient(135deg, ${colors.primaryHover} 0%, #7C3AED 100%);
+      box-shadow: 0 6px 20px rgba(37,99,235,0.4);
+      background: linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%);
     }
     &:active {
       transform: translateY(0);

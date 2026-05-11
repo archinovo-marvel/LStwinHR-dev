@@ -217,11 +217,18 @@ class ServerDataSync {
 
   async getAvailablePositions(options = {}) {
     try {
+      const token = options?.token || null;
       const ownerId = options?.ownerId ? Number(options.ownerId) : null;
-      const requestUrl = ownerId ? `${this.baseUrl}/positions?ownerId=${ownerId}` : `${this.baseUrl}/positions`;
+      const params = new URLSearchParams();
+      if (ownerId) params.set('ownerId', String(ownerId));
+      if (token) params.set('token', token);
+      const queryString = params.toString();
+      const requestUrl = queryString ? `${this.baseUrl}/positions?${queryString}` : `${this.baseUrl}/positions`;
+      // 如果有公开 token，不使用 localStorage 的 auth header，让后端走公开通道
+      const headers = token ? {} : this.getAuthHeaders();
       const response = await this.fetchWithTimeout(requestUrl, {
         method: 'GET',
-        headers: this.getAuthHeaders()
+        headers
       });
       const result = await response.json();
       return Array.isArray(result.positions) ? result.positions : [];
@@ -275,6 +282,46 @@ class ServerDataSync {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+  }
+
+  // 公开投递候选人（二维码扫码等场景，无需登录）
+  async addCandidatePublic(formData, options = {}) {
+    try {
+      const token = options?.token || null;
+      if (!token) {
+        throw new Error('公开投递缺少访问令牌');
+      }
+      const requestUrl = `${this.baseUrl}/public/candidates?token=${encodeURIComponent(token)}`;
+      console.log('公开投递 URL:', requestUrl);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      console.log('公开投递响应状态:', response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('公开投递成功:', result.candidate);
+        return result.candidate;
+      } else {
+        const errorText = await response.text();
+        console.error('公开投递失败:', response.status, errorText);
+        throw new Error(`提交失败: ${response.status} ${errorText}`);
+      }
+    } catch (error) {
+      console.error('公开投递候选人数据失败:', error);
+      if (error.name === 'AbortError') {
+        throw new Error('请求超时，请检查网络连接或稍后重试');
+      }
+      throw error;
+    }
   }
 
   // 检查服务器健康状态

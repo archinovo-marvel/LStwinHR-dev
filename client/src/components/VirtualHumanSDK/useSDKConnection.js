@@ -116,6 +116,24 @@ export const setupAutoplayRecovery = (player, ensurePlayerAudibleFn) => {
   );
 };
 
+const extractAsrTranscript = (payload) => {
+  if (!payload) return '';
+  const candidates = [
+    payload.text,
+    payload.content,
+    payload.displayContent,
+    payload.final_text,
+    payload.transcript,
+    payload.answer?.text,
+    payload.result?.text,
+    payload.result?.content,
+    payload.asr_text,
+  ];
+
+  const transcript = candidates.find((value) => typeof value === 'string' && value.trim());
+  return transcript ? transcript.trim() : '';
+};
+
 /**
  * Hook for SDK connection management
  */
@@ -129,10 +147,12 @@ export const useSDKConnection = ({
   onStatusChange,
   onVirtualHumanReply,
   onVirtualHumanStreamingEnd,
+  onAsrMessage,
 }) => {
   const onStatusChangeRef = useRef(onStatusChange);
   const onVirtualHumanReplyRef = useRef(onVirtualHumanReply);
   const onVirtualHumanStreamingEndRef = useRef(onVirtualHumanStreamingEnd);
+  const onAsrMessageRef = useRef(onAsrMessage);
   const nlpFinalizeTimeoutRef = useRef(null);
   const frameStopFinalizeTimeoutRef = useRef(null);
   const latestNlpContentRef = useRef('');
@@ -149,6 +169,10 @@ export const useSDKConnection = ({
   useEffect(() => {
     onVirtualHumanStreamingEndRef.current = onVirtualHumanStreamingEnd;
   }, [onVirtualHumanStreamingEnd]);
+
+  useEffect(() => {
+    onAsrMessageRef.current = onAsrMessage;
+  }, [onAsrMessage]);
 
   // 记录是否有用户交互（Chrome 自动播放策略需要）
   useEffect(() => {
@@ -215,8 +239,6 @@ export const useSDKConnection = ({
     removeGreenBackground,
     startPing,
     stopPing,
-    interviewStateRef,
-    setInterviewState,
   }) => {
     try {
       console.log('[SDK_INIT_START] 开始初始化虚拟人SDK...');
@@ -391,8 +413,11 @@ export const useSDKConnection = ({
         .on(SDKEvents.nlp, () => {
           // NLP 内容统一走 emit 包装后的最终结果回调，避免分片重复渲染
         })
-        .on(SDKEvents.asr, () => {
-          // ASR 是候选人语音识别结果，不直接作为 AI 回复写入聊天区
+        .on(SDKEvents.asr, (payload) => {
+          const transcript = extractAsrTranscript(payload);
+          if (transcript && onAsrMessageRef.current) {
+            onAsrMessageRef.current(transcript, payload);
+          }
         })
         .on('recorder_start', () => {
           console.log('🎤 语音识别已启动');
@@ -405,13 +430,11 @@ export const useSDKConnection = ({
         .on(SDKEvents.frame_start, (frameData) => {
           console.log('🎬 AI开始回答');
           latestNlpContentRef.current = '';
-          setInterviewState(prev => ({ ...prev, isAIResponding: true }));
         })
         .on(SDKEvents.frame_stop, (frameData) => {
           console.log('🎬 AI播报完成');
           console.log('[SDK_FRAME_STOP]', {
-            frameData,
-            interviewState: interviewStateRef.current
+            frameData
           });
 
           if (latestNlpContentRef.current && onVirtualHumanReplyRef.current) {
@@ -424,28 +447,6 @@ export const useSDKConnection = ({
             });
             onVirtualHumanReplyRef.current(content);
           }
-
-          setInterviewState(prev => {
-            const newState = { ...prev, isAIResponding: false };
-
-            // 如果AI刚播报完面试问题，不立即反问，而是等待面试者回答
-            if (prev.isWaitingForAnswer && prev.isAutoQuestionEnabled && !prev.isInterviewComplete) {
-              console.log('🎤 AI已播报完面试问题，等待面试者回答...');
-            }
-
-            // 如果AI刚完成评价，标记状态但不在这里自动进入下一个问题
-            if (prev.isAIEvaluating && prev.isAutoQuestionEnabled && !prev.isInterviewComplete) {
-              console.log('✅ AI评价完成，等待流式回复结束回调触发下一个问题');
-            }
-
-            // 如果AI刚播报完，且不在等待回答状态，说明AI在给出评价
-            if (!prev.isWaitingForAnswer && prev.isAutoQuestionEnabled && !prev.isInterviewComplete && !prev.isAIEvaluating) {
-              console.log('🎯 AI开始评价，设置isAIEvaluating为true');
-              newState.isAIEvaluating = true;
-            }
-
-            return newState;
-          });
 
           if (frameStopFinalizeTimeoutRef.current) {
             clearTimeout(frameStopFinalizeTimeoutRef.current);

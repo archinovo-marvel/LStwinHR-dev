@@ -24,12 +24,11 @@ import {
 } from '@ant-design/icons';
 import styled from 'styled-components';
 import { calculateResumeScore } from '../../pages/ResumeAnalysis';
-import AnalysisLoadingProgress from './LoadingAnimation';
+import TechLoadingAnimation from './LoadingAnimation';
 import './CandidateDetailModal.css';
+import { colors } from '../../theme/colors';
 
 const { Title, Text } = Typography;
-
-import { colors } from '../../theme/colors';
 
 const StyledModal = styled(Modal)`
   .ant-modal-content {
@@ -82,6 +81,304 @@ const getResumeMatchMeta = (resumeScore) => {
 };
 
 const safeArray = (value) => (Array.isArray(value) ? value : []);
+
+const clampScore = (value, max) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(max, Math.round(numeric)));
+};
+
+const toTextArray = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap(item => toTextArray(item))
+      .filter(Boolean);
+  }
+  if (value === null || value === undefined) return [];
+  const normalized = String(value).replace(/\s+/g, ' ').trim();
+  return normalized ? [normalized] : [];
+};
+
+const hasMeaningfulExperienceContent = (items = [], fields = []) => {
+  return safeArray(items).some(item => {
+    if (typeof item === 'string') {
+      return item.trim().length > 0;
+    }
+    return fields.some(field => {
+      const fieldValue = item?.[field];
+      if (Array.isArray(fieldValue)) {
+        return fieldValue.some(entry => String(entry || '').trim().length > 0);
+      }
+      return String(fieldValue || '').trim().length > 0;
+    });
+  });
+};
+
+const deriveScoreFallbacksFromContent = (scores = {}, extractedContent = {}) => {
+  const workExperience = safeArray(extractedContent.workExperience);
+  const projectExperience = safeArray(extractedContent.projectExperience || extractedContent.projects);
+  const campusExperience = safeArray(extractedContent.campusExperience);
+  const education = safeArray(extractedContent.education);
+  const skills = safeArray(extractedContent.skills);
+
+  const hasWorkExperience = hasMeaningfulExperienceContent(workExperience, ['company', 'companyOrOrg', 'position', 'role', 'description', 'responsibilities']);
+  const hasProjectExperience = hasMeaningfulExperienceContent(projectExperience, ['projectName', 'name', 'role', 'description', 'responsibilities']);
+  const hasCampusExperience = hasMeaningfulExperienceContent(campusExperience, ['organization', 'role', 'description']);
+  const hasEducation = hasMeaningfulExperienceContent(education, ['school', 'major', 'degree']);
+  const hasSkills = skills.length > 0;
+
+  const workScore = scores.workScore > 0
+    ? clampScore(scores.workScore, 20)
+    : (hasWorkExperience ? clampScore(Math.min(20, workExperience.length * 8 + (hasProjectExperience ? 4 : 0)), 20) : 0);
+
+  const projectScore = scores.projectScore > 0
+    ? clampScore(scores.projectScore, 30)
+    : (hasProjectExperience || hasCampusExperience
+      ? clampScore(Math.min(30, projectExperience.length * 10 + campusExperience.length * 6), 30)
+      : 0);
+
+  const expressionSignals = [
+    hasEducation,
+    hasWorkExperience,
+    hasProjectExperience || hasCampusExperience,
+    hasSkills,
+  ].filter(Boolean).length;
+
+  const expressionScore = scores.expressionScore > 0
+    ? clampScore(scores.expressionScore, 5)
+    : clampScore(Math.min(5, expressionSignals), 5);
+
+  return {
+    educationScore: clampScore(scores.educationScore, 20),
+    workScore,
+    projectScore,
+    skillScore: clampScore(scores.skillScore, 25),
+    expressionScore,
+    riskPenalty: clampScore(scores.riskPenalty, 20),
+  };
+};
+
+const REPORT_SECTION_ALIASES = {
+  '综合评价': '整体评价',
+  '面试官评价': '整体评价',
+  '优势亮点': '核心优势',
+  '候选人优势': '核心优势',
+  '优点': '核心优势',
+  '主要优点': '核心优势',
+  '改进建议': '待提升项',
+  '主要短板': '待提升项',
+  '候选人短板': '待提升项',
+  '缺点': '待提升项',
+  '主要缺点': '待提升项',
+  '录用结论': '录用建议',
+};
+
+const REPORT_SECTION_CANONICAL_LABELS = [
+  '整体评价',
+  'IQ分析',
+  'EQ分析',
+  'AQ分析',
+  'MQ分析',
+  '核心优势',
+  '待提升项',
+  '录用建议',
+];
+
+const REPORT_SECTION_MATCHER = new RegExp(
+  `(${[...REPORT_SECTION_CANONICAL_LABELS, ...Object.keys(REPORT_SECTION_ALIASES)]
+    .sort((left, right) => right.length - left.length)
+    .join('|')})[：:]`,
+  'g'
+);
+
+const INTERVIEW_DIMENSION_META = {
+  iq: {
+    label: 'IQ分析',
+    title: '智商 IQ',
+    max: 50,
+    type: 'iq',
+    icon: <BulbOutlined />,
+    positive: '专业知识和逻辑表达比较扎实，能围绕岗位问题给出有结构的回答。',
+    negative: '专业知识呈现还不够稳定，部分回答停留在概念层面，缺少关键细节支撑。',
+  },
+  eq: {
+    label: 'EQ分析',
+    title: '情商 EQ',
+    max: 20,
+    type: 'eq',
+    icon: <SafetyOutlined />,
+    positive: '沟通表达自然，能兼顾协作关系和业务情境，互动感较好。',
+    negative: '沟通中的同理心和协作表达偏弱，遇到人际场景时说服力还不够。',
+  },
+  aq: {
+    label: 'AQ分析',
+    title: '逆商 AQ',
+    max: 15,
+    type: 'aq',
+    icon: <TrophyOutlined />,
+    positive: '面对压力与困难时有一定复盘和应对思路，表现出较好的韧性。',
+    negative: '面对挑战时的拆解思路还不够清晰，抗压和复盘能力需要更多案例支撑。',
+  },
+  mq: {
+    label: 'MQ分析',
+    title: '德商 MQ',
+    max: 15,
+    type: 'mq',
+    icon: <SafetyOutlined />,
+    positive: '职业判断和价值观表达比较稳定，能体现责任意识与边界感。',
+    negative: '职业判断和价值观表达略显笼统，责任意识与原则性还需要更具体的例子。',
+  },
+};
+
+const deriveInterviewRecommendation = (totalScore = 0) => {
+  if (totalScore >= 85) return '建议优先推进复试或录用评估，重点核实薪酬与到岗时间。';
+  if (totalScore >= 75) return '建议进入下一轮，围绕岗位深水区问题继续验证稳定性和实战细节。';
+  if (totalScore >= 65) return '可作为备选候选人，建议补充考察关键技能和真实项目贡献。';
+  return '暂不建议直接推进录用，除非后续补充面试能明显弥补关键短板。';
+};
+
+const deriveInterviewOverallSummary = ({ totalScore = 0, candidateName, strongestDimensionLabel, weakestDimensionLabel }) => {
+  const candidateLabel = candidateName ? `${candidateName}` : '该候选人';
+  const scoreLevel = totalScore >= 85
+    ? '整体表现比较突出'
+    : totalScore >= 75
+      ? '整体表现稳健'
+      : totalScore >= 65
+        ? '具备一定岗位匹配度'
+        : '当前匹配度仍需谨慎评估';
+
+  const strengthPart = strongestDimensionLabel
+    ? `其中${strongestDimensionLabel}是当前最明显的优势维度。`
+    : '';
+  const weaknessPart = weakestDimensionLabel
+    ? `相对需要继续确认的是${weakestDimensionLabel}相关表现。`
+    : '';
+
+  return `${candidateLabel}${scoreLevel}，面试总分为${Math.round(totalScore)}分。${strengthPart}${weaknessPart}`.trim();
+};
+
+const buildDimensionSectionFallback = (dimensionKey, score = 0) => {
+  const meta = INTERVIEW_DIMENSION_META[dimensionKey];
+  if (!meta) return '';
+  const ratio = meta.max > 0 ? score / meta.max : 0;
+  if (ratio >= 0.72) return meta.positive;
+  if (ratio <= 0.45) return meta.negative;
+  return `${meta.title}表现中等，基础能力具备，但还需要更多具体案例来增强判断把握。`;
+};
+
+const parseInterviewReportSections = (reportText = '') => {
+  const normalized = String(reportText || '').replace(/\r/g, '').trim();
+  if (!normalized) return {};
+
+  const matches = [...normalized.matchAll(REPORT_SECTION_MATCHER)];
+  if (matches.length === 0) return {};
+
+  const sections = {};
+  matches.forEach((match, index) => {
+    const label = REPORT_SECTION_ALIASES[match[1]] || match[1];
+    const valueStart = match.index + match[0].length;
+    const valueEnd = index + 1 < matches.length ? matches[index + 1].index : normalized.length;
+    const value = normalized.slice(valueStart, valueEnd).trim();
+    if (value) {
+      sections[label] = value;
+    }
+  });
+
+  return sections;
+};
+
+const normalizeReportSectionLines = (value = '') => {
+  if (!value) return [];
+  const bulletSplit = String(value)
+    .replace(/[；;]\s*/g, '\n')
+    .split(/\n|(?=•)|(?=\d+[.、])|(?=优点[：:])|(?=缺点[：:])/)
+    .map(item => item.replace(/^(优点|缺点)[：:]/, '').replace(/^[-•\s]+/, '').trim())
+    .filter(Boolean);
+
+  return bulletSplit.length > 0 ? bulletSplit : [String(value).trim()];
+};
+
+const dedupeReportLines = (items = []) => {
+  const visited = new Set();
+  return items.filter(item => {
+    const normalized = String(item || '').trim();
+    if (!normalized || visited.has(normalized)) return false;
+    visited.add(normalized);
+    return true;
+  });
+};
+
+const buildInterviewReportViewModel = (candidate) => {
+  const interviewDetails = candidate?.interviewDetails || {};
+  const reportText = interviewDetails.report || '';
+  const parsedSections = parseInterviewReportSections(reportText);
+  const categoryScores = interviewDetails.categoryScores || {};
+  const dimensionEntries = Object.entries(INTERVIEW_DIMENSION_META).map(([key, meta]) => ({
+    key,
+    meta,
+    score: Number(categoryScores?.[key]?.score || 0),
+  }));
+  const sortedDimensions = [...dimensionEntries].sort((left, right) => right.score - left.score);
+  const strongestDimension = sortedDimensions[0];
+  const weakestDimension = sortedDimensions[sortedDimensions.length - 1];
+
+  const strengths = dedupeReportLines(
+    normalizeReportSectionLines(parsedSections['核心优势']).concat(
+      strongestDimension?.score > 0
+        ? [buildDimensionSectionFallback(strongestDimension.key, strongestDimension.score)]
+        : []
+    )
+  ).slice(0, 3);
+
+  const improvements = dedupeReportLines(
+    normalizeReportSectionLines(parsedSections['待提升项']).concat(
+      weakestDimension?.score > 0
+        ? [buildDimensionSectionFallback(weakestDimension.key, weakestDimension.score)]
+        : []
+    )
+  ).slice(0, 3);
+
+  const overall = dedupeReportLines(
+    normalizeReportSectionLines(parsedSections['整体评价']).concat(
+      deriveInterviewOverallSummary({
+        totalScore: interviewDetails.totalScore || 0,
+        candidateName: candidate?.name,
+        strongestDimensionLabel: strongestDimension?.meta?.title,
+        weakestDimensionLabel: weakestDimension?.meta?.title,
+      })
+    )
+  ).slice(0, 3);
+
+  const recommendationLines = dedupeReportLines(
+    normalizeReportSectionLines(parsedSections['录用建议']).concat(
+      deriveInterviewRecommendation(interviewDetails.totalScore || 0)
+    )
+  ).slice(0, 2);
+
+  const dimensionCards = dimensionEntries.map(({ key, meta, score }) => ({
+    key,
+    label: meta.label,
+    title: meta.title,
+    type: meta.type,
+    icon: meta.icon,
+    score,
+    content: dedupeReportLines(
+      normalizeReportSectionLines(parsedSections[meta.label]).concat(buildDimensionSectionFallback(key, score))
+    ).slice(0, 2),
+  }));
+
+  return {
+    reportText,
+    overall,
+    strengths,
+    improvements,
+    recommendationLines,
+    dimensionCards,
+    hasStructuredContent: Boolean(
+      overall.length || strengths.length || improvements.length || recommendationLines.length || dimensionCards.some(card => card.content.length)
+    ),
+  };
+};
 
 const buildFallbackInterviewSuggestions = ({ risks, scores, extractedContent, position }) => {
   const suggestions = [];
@@ -288,16 +585,19 @@ const getAnalysisFromCandidate = (candidate) => {
   // 优先使用 resumeAnalysisResult，但需要合并候选人根级别的评分字段
   if (candidate?.resumeAnalysisResult) {
     const analysisResult = candidate.resumeAnalysisResult;
+    const normalizedScores = deriveScoreFallbacksFromContent(analysisResult.scores || {}, analysisResult);
     // 确保 scores 对象包含候选人根级别的最新评分
     return {
       ...analysisResult,
       scores: {
         ...analysisResult.scores,
+        ...normalizedScores,
         // 使用候选人根级别的评分（优先级最高，因为面试后这些值会更新）
         mbtiScore: candidate.mbtiScore ?? analysisResult.scores?.mbtiScore ?? 0,
         interviewScore: candidate.interviewScore ?? analysisResult.scores?.interviewScore ?? 0,
         hasInterview: candidate.hasInterview ?? analysisResult.scores?.hasInterview ?? false,
-        finalScore: candidate.finalScore ?? candidate.matchScore ?? analysisResult.scores?.finalScore ?? 0
+        finalScore: candidate.finalScore ?? candidate.matchScore ?? analysisResult.scores?.finalScore ?? 0,
+        resumeScore: calculateResumeScore(normalizedScores)
       }
     };
   }
@@ -324,6 +624,21 @@ const getAnalysisFromCandidate = (candidate) => {
   const projectScore = Math.min(30, Math.round(skillMatches.length * 5));
   const skillScore = Math.min(25, Math.round(skillMatches.length * 8));
   const expressionScore = Math.min(5, highlights.length > 0 ? 3 : 0);
+
+  const normalizedLegacyScores = deriveScoreFallbacksFromContent({
+    educationScore,
+    workScore,
+    projectScore,
+    skillScore,
+    expressionScore,
+    riskPenalty: 0,
+  }, {
+    education,
+    workExperience,
+    projectExperience,
+    campusExperience,
+    skills,
+  });
 
   return {
     summary: {
@@ -380,13 +695,8 @@ const getAnalysisFromCandidate = (candidate) => {
       items: []
     },
     scores: {
-      educationScore,
-      workScore,
-      projectScore,
-      skillScore,
-      expressionScore,
-      riskPenalty: 0,
-      resumeScore: educationScore + workScore + projectScore + skillScore + expressionScore,
+      ...normalizedLegacyScores,
+      resumeScore: calculateResumeScore(normalizedLegacyScores),
       mbtiScore: candidate.mbtiScore || 0,
       interviewScore: candidate.interviewScore || 0,
       hasInterview: Boolean(candidate.hasInterview),
@@ -435,7 +745,7 @@ const buildInterviewPanels = (candidate) => {
 };
 
 const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, refreshingAnalysis = false }) => {
-  const [selectedAnalysisMode, setSelectedAnalysisMode] = useState('default');
+  const [selectedAnalysisMode, setSelectedAnalysisMode] = useState('deepseek');
 
   if (!candidate) return null;
 
@@ -461,6 +771,12 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
   const risks = { ...rawRisks, items: filteredRiskItems };
   const riskMeta = RISK_LEVEL_META[risks.level] || RISK_LEVEL_META.low;
   const interviewPanels = buildInterviewPanels(candidate);
+  const interviewReport = buildInterviewReportViewModel(candidate);
+  const hasInterviewReport = candidate.hasInterview && (
+    candidate.interviewDetails?.report
+    || candidate.interviewDetails?.totalScore != null
+    || candidate.interviewDetails?.categoryScores
+  );
 
   // 只有在非分析状态才计算评分和详情
   const scoreBreakdown = !isAnalyzing ? [
@@ -473,6 +789,10 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
 
   // 使用统一的计算函数
   const displayedResumeScore = !isAnalyzing ? calculateResumeScore(scores) : 0;
+  // 综合评分 = 简历*0.4 + MBTI*0.1 + 面试*0.5
+  const computedFinalScore = !isAnalyzing && displayedResumeScore > 0
+    ? Math.round(displayedResumeScore * 0.4 + (scores.mbtiScore || 0) * 0.1 + (scores.interviewScore || 0) * 0.5)
+    : 0;
   const resumeRecommendationLabel = !isAnalyzing ? getResumeRecommendationLabel(displayedResumeScore) : '';
   const matchMeta = !isAnalyzing ? getResumeMatchMeta(displayedResumeScore) : null;
   const suggestionText = !isAnalyzing ? String(
@@ -498,7 +818,7 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
       onCancel={onClose}
       footer={null}
       width={1180}
-      destroyOnClose
+      destroyOnHidden
       styles={{ body: { padding: 0, maxHeight: '84vh', overflow: 'auto' } }}
     >
       <div className="candidate-detail-modal">
@@ -545,7 +865,7 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
         {/* 正在分析时显示动画进度条，清空原有内容 */}
         {isAnalyzing && (
           <div className="candidate-detail-analysis-block">
-            <AnalysisLoadingProgress mode={selectedAnalysisMode} liveStatus={liveStatus} />
+            <TechLoadingAnimation mode={selectedAnalysisMode} liveStatus={liveStatus} />
           </div>
         )}
 
@@ -605,8 +925,8 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
                     <TrophyOutlined /> 综合评估
                   </div>
                 </div>
-                <div className="candidate-detail-score-value" style={{ color: SCORE_COLOR(scores.finalScore ?? candidate.matchScore ?? 0) }}>
-                  {formatScore(scores.finalScore ?? candidate.matchScore)}
+                <div className="candidate-detail-score-value" style={{ color: SCORE_COLOR(computedFinalScore || (scores.finalScore ?? candidate.matchScore ?? 0)) }}>
+                  {formatScore(computedFinalScore || (scores.finalScore ?? candidate.matchScore))}
                 </div>
                 {scores.note && (
                   <Alert
@@ -649,21 +969,156 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
                 </div>
               </section>
 
-              <section className="candidate-detail-card">
-                <div className="candidate-detail-card-header">
-                  <div className="candidate-detail-card-title">
-                    <FileSearchOutlined /> 面试报告
-                  </div>
-                </div>
-                {candidate.hasInterview && candidate.interviewDetails?.report ? (
-                  <div className="candidate-detail-reason-list">
-                    <div className="candidate-detail-reason-item" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
-                      {candidate.interviewDetails.report}
+              {/* 面试报告模块 - Premium Design */}
+              <section className="interview-report-section">
+                {hasInterviewReport ? (
+                  <>
+                    {/* 报告头部 */}
+                    <div className="interview-report-header">
+                      <div className="interview-report-title">
+                        <div className="interview-report-title-icon">
+                          <FileSearchOutlined />
+                        </div>
+                        <span>面试报告</span>
+                      </div>
+                      {candidate.interviewDetails?.totalScore != null && (
+                        <div className="interview-report-total">
+                          <span className="interview-report-total-label">总分</span>
+                          <span className="interview-report-total-value" style={{ color: SCORE_COLOR(candidate.interviewDetails.totalScore) }}>
+                            {candidate.interviewDetails.totalScore}
+                          </span>
+                          <span className="interview-report-total-max">/ 100</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+
+                    {/* 四维度得分网格 */}
+                    {candidate.interviewDetails.categoryScores && (
+                      <div className="dimension-grid">
+                        {[
+                          { key: 'iq', label: '智商 IQ', max: 50 },
+                          { key: 'eq', label: '情商 EQ', max: 20 },
+                          { key: 'aq', label: '逆商 AQ', max: 15 },
+                          { key: 'mq', label: '德商 MQ', max: 15 }
+                        ].map(dim => {
+                          const score = candidate.interviewDetails.categoryScores[dim.key]?.score || 0;
+                          const percent = dim.max > 0 ? (score / dim.max) * 100 : 0;
+                          return (
+                            <div key={dim.key} className="dimension-card" data-dim={dim.key}>
+                              <div className="dimension-label">{dim.label}</div>
+                              <div className="dimension-score">{score}</div>
+                              <div className="dimension-max">/ {dim.max}</div>
+                              <div className="dimension-bar">
+                                <div className="dimension-bar-fill" style={{ width: `${Math.min(percent, 100)}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 结构化报告内容 */}
+                    <div className="report-content-wrapper">
+                      <div className="report-overview-layout">
+                        <article className="report-hero-card">
+                          <div className="report-hero-eyebrow">AI面试官综合判断</div>
+                          <div className="report-hero-title-row">
+                            <div className="report-hero-title-icon">
+                              <FileTextOutlined />
+                            </div>
+                            <div>
+                              <h3 className="report-hero-title">综合评价</h3>
+                              <p className="report-hero-subtitle">结合总分、四维表现与回答细节给出的面试官判断</p>
+                            </div>
+                          </div>
+                          <div className="report-hero-content">
+                            {interviewReport.overall.map((line, index) => (
+                              <p key={`overall-${index}`} className="report-hero-line">{line}</p>
+                            ))}
+                          </div>
+                        </article>
+
+                        <div className="report-feedback-grid">
+                          <article className="report-feedback-card strengths">
+                            <div className="report-feedback-header">
+                              <div className="report-feedback-icon">
+                                <TrophyOutlined />
+                              </div>
+                              <div>
+                                <div className="report-feedback-title">候选人优势</div>
+                                <div className="report-feedback-subtitle">面试中体现较稳定的加分项</div>
+                              </div>
+                            </div>
+                            <div className="report-feedback-list">
+                              {interviewReport.strengths.map((line, index) => (
+                                <div key={`strength-${index}`} className="report-feedback-item">{line}</div>
+                              ))}
+                            </div>
+                          </article>
+
+                          <article className="report-feedback-card improvements">
+                            <div className="report-feedback-header">
+                              <div className="report-feedback-icon">
+                                <BulbOutlined />
+                              </div>
+                              <div>
+                                <div className="report-feedback-title">候选人短板</div>
+                                <div className="report-feedback-subtitle">后续复试或录用前应重点确认的风险点</div>
+                              </div>
+                            </div>
+                            <div className="report-feedback-list">
+                              {interviewReport.improvements.map((line, index) => (
+                                <div key={`improvement-${index}`} className="report-feedback-item">{line}</div>
+                              ))}
+                            </div>
+                          </article>
+                        </div>
+
+                        <div className="report-analysis-grid">
+                          {interviewReport.dimensionCards.map((card) => (
+                            <article key={card.key} className="report-analysis-card" data-type={card.type}>
+                              <div className="report-analysis-card-header">
+                                <div className="report-analysis-card-icon">{card.icon}</div>
+                                <div>
+                                  <div className="report-analysis-card-title">{card.label}</div>
+                                  <div className="report-analysis-card-score">{card.score}/{INTERVIEW_DIMENSION_META[card.key].max}</div>
+                                </div>
+                              </div>
+                              <div className="report-analysis-card-content">
+                                {card.content.map((line, index) => (
+                                  <div key={`${card.key}-${index}`} className="report-analysis-line">{line}</div>
+                                ))}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+
+                        <article className="report-recommendation-card">
+                          <div className="report-recommendation-header">
+                            <div className="report-recommendation-icon">
+                              <FileSearchOutlined />
+                            </div>
+                            <div>
+                              <div className="report-recommendation-title">下一步建议</div>
+                              <div className="report-recommendation-subtitle">给招聘方的推进建议与关注重点</div>
+                            </div>
+                          </div>
+                          <div className="report-recommendation-content">
+                            {interviewReport.recommendationLines.map((line, index) => (
+                              <p key={`recommendation-${index}`} className="report-recommendation-line">{line}</p>
+                            ))}
+                          </div>
+                        </article>
+                      </div>
+                    </div>
+                  </>
                 ) : (
-                  <div style={{ color: '#9CA3AF', padding: '16px 0', textAlign: 'center' }}>
-                    该应聘者还未面试
+                  <div className="interview-empty-state">
+                    <div className="interview-empty-icon">
+                      <FileSearchOutlined />
+                    </div>
+                    <div className="interview-empty-text">该应聘者还未面试</div>
+                    <div className="interview-empty-sub">完成面试后将在此显示详细报告</div>
                   </div>
                 )}
               </section>
@@ -690,29 +1145,91 @@ const CandidateDetailModal = ({ visible, candidate, onClose, onRefreshAnalysis, 
                 <BulbOutlined /> AI面试评分
               </div>
               <div className="ai-total-score">
-                总分: <span style={{ color: SCORE_COLOR(candidate.interviewDetails.totalScore) }}>{candidate.interviewDetails.totalScore}</span>
+                总分: <span style={{ color: SCORE_COLOR(candidate.interviewDetails.totalScore) }}>{candidate.interviewDetails.totalScore}</span>/100
               </div>
             </div>
-            <div className="interview-analysis-section">
-              {candidate.interviewDetails.questionScores.map((q, i) => (
-                <div key={i} className="question-score-item">
-                  <div className="question-score-header">
-                    <span className="question-index">Q{i + 1}</span>
-                    <span className="question-text">{q.question}</span>
-                  </div>
-                  <div className="question-score-answer">
-                    <Text type="secondary" style={{ fontSize: 12 }}>回答:</Text>
-                    <span className="answer-text">{q.answer || '-'}</span>
-                  </div>
-                  <div className="score-details">
-                    <span className="score-item"><Text type="secondary">相关性:</Text> {q.relevance}</span>
-                    <span className="score-item"><Text type="secondary">深度:</Text> {q.depth}</span>
-                    <span className="score-item"><Text type="secondary">清晰:</Text> {q.clarity}</span>
-                    <span className="score-item"><Text type="secondary">完整:</Text> {q.completeness}</span>
-                  </div>
-                  {q.comment && <div className="question-comment">{q.comment}</div>}
+            {/* 四维度得分概览 */}
+            {candidate.interviewDetails.categoryScores && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+                {[
+                  { key: 'iq', label: '智商IQ', max: 50 },
+                  { key: 'eq', label: '情商EQ', max: 20 },
+                  { key: 'aq', label: '逆商AQ', max: 15 },
+                  { key: 'mq', label: '德商MQ', max: 15 }
+                ].map(dim => {
+                  const score = candidate.interviewDetails.categoryScores[dim.key]?.score || 0;
+                  return (
+                    <div key={dim.key} style={{ textAlign: 'center', padding: '10px 8px', background: '#f8fafc', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 4 }}>{dim.label}</div>
+                      <div style={{ fontSize: 20, fontWeight: 600, color: SCORE_COLOR(score / dim.max * 100) }}>{score}</div>
+                      <div style={{ fontSize: 11, color: '#9CA3AF' }}>/ {dim.max}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* P0改进：8维度详细评分展示 */}
+            {candidate.interviewDetails.evaluationScores && (
+              <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f8fafc', borderRadius: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2a3f', marginBottom: 12 }}>8维度详细评分</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                  {[
+                    { key: 'relevance', label: '相关性', color: '#1890ff' },
+                    { key: 'depth', label: '深度', color: '#52c41a' },
+                    { key: 'clarity', label: '清晰度', color: '#faad14' },
+                    { key: 'professionalism', label: '专业性', color: '#722ed1' },
+                    { key: 'evidence', label: '证据性', color: '#eb2f96' },
+                    { key: 'actionability', label: '可执行性', color: '#13c2c2' },
+                    { key: 'selfAwareness', label: '自我认知', color: '#fa8c16' },
+                    { key: 'growthMindset', label: '成长思维', color: '#2f54eb' }
+                  ].map(dim => {
+                    const score = candidate.interviewDetails.evaluationScores[dim.key] || 5;
+                    const percentage = score * 10;
+                    return (
+                      <div key={dim.key} style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>{dim.label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: dim.color }}>{score}</div>
+                        <div style={{ marginTop: 4, height: 4, background: '#e5e7eb', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ width: `${percentage}%`, height: '100%', background: dim.color, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              </div>
+            )}
+            <div className="interview-analysis-section">
+              {candidate.interviewDetails.questionScores.map((q, i) => {
+                // 根据题目索引判断所属维度
+                const dimLabel = i < 3 ? 'IQ' : i < 6 ? 'EQ' : i < 9 ? 'AQ' : 'MQ';
+                const dimColor = i < 3 ? '#2F80ED' : i < 6 ? '#10B981' : i < 9 ? '#F59E0B' : '#8B5CF6';
+                return (
+                  <div key={i} className="question-score-item">
+                    <div className="question-score-header">
+                      <span className="question-index">Q{i + 1}</span>
+                      <Tag color={dimColor} style={{ marginLeft: 4, marginRight: 8 }}>{dimLabel}</Tag>
+                      <span className="question-text">{q.question}</span>
+                    </div>
+                    <div className="question-score-answer">
+                      <Text type="secondary" style={{ fontSize: 12 }}>回答:</Text>
+                      <span className="answer-text">{q.answer || '-'}</span>
+                    </div>
+                    {/* P0改进：显示8维度评分 */}
+                    <div className="score-details">
+                      <span className="score-item"><Text type="secondary">相关性:</Text> {q.relevance}</span>
+                      <span className="score-item"><Text type="secondary">深度:</Text> {q.depth}</span>
+                      <span className="score-item"><Text type="secondary">清晰:</Text> {q.clarity}</span>
+                      <span className="score-item"><Text type="secondary">专业性:</Text> {q.professionalism || q.completeness || '-'}</span>
+                      {/* 新增维度 */}
+                      {q.evidence !== undefined && <span className="score-item"><Text type="secondary">证据性:</Text> {q.evidence}</span>}
+                      {q.actionability !== undefined && <span className="score-item"><Text type="secondary">可执行:</Text> {q.actionability}</span>}
+                      {q.selfAwareness !== undefined && <span className="score-item"><Text type="secondary">自我认知:</Text> {q.selfAwareness}</span>}
+                      {q.growthMindset !== undefined && <span className="score-item"><Text type="secondary">成长思维:</Text> {q.growthMindset}</span>}
+                    </div>
+                    {q.comment && <div className="question-comment">{q.comment}</div>}
+                  </div>
+                );
+              })}
               {candidate.interviewDetails.summary && (
                 <div className="interview-summary">
                   <Text strong style={{ fontSize: 13, color: '#1a2a3f' }}>整体评价:</Text>

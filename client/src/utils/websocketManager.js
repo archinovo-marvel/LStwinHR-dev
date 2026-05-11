@@ -11,6 +11,7 @@ export class WebSocketManager {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectInterval = 3000;
+    this.reconnectTimer = null;
     this.eventListeners = new Map();
   }
 
@@ -136,7 +137,8 @@ export class WebSocketManager {
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         console.log(`尝试重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-        setTimeout(() => {
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = null;
           this.connect();
         }, this.reconnectInterval);
       }
@@ -279,6 +281,10 @@ export class WebSocketManager {
    * 销毁连接管理器
    */
   destroy() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.disconnect();
     this.eventListeners.clear();
   }

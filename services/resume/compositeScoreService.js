@@ -1,9 +1,12 @@
-const { FINAL_SCORE_WEIGHTS, MBTI_SCORE_MAP } = require('./analysisConfig');
+const { FINAL_SCORE_WEIGHTS } = require('./analysisConfig');
 
 class CompositeScoreService {
+  // MBTI评分不再使用预设映射表，改为AI基于岗位匹配度打分
+  // 此方法仅作为兼容保留，实际评分应在简历分析时由AI生成
   getMbtiScore(mbti) {
     if (!mbti) return null;
-    return MBTI_SCORE_MAP[String(mbti).toUpperCase()] || 75;
+    // 返回默认值 75，实际评分应以 AI 生成的 mbtiMatchScore 为准
+    return 75;
   }
 
   normalizeScore(value) {

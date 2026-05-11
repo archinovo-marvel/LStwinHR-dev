@@ -4,10 +4,11 @@ import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import LoginPromptModal from '../components/LoginPromptModal';
+import { colors } from '../theme/colors';
 
 // Custom SVG Icons
-const IconQR = ({ size = 22, color, strokeWidth = 1.5 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || '#4A9ECF'} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+const IconQR = ({ size = 22, color = '#000000', strokeWidth = 1.5 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" rx="1" />
     <rect x="14" y="3" width="7" height="7" rx="1" />
     <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -15,8 +16,8 @@ const IconQR = ({ size = 22, color, strokeWidth = 1.5 }) => (
   </svg>
 );
 
-const IconDocument = ({ size = 22, color, strokeWidth = 1.5 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || '#4A9ECF'} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+const IconDocument = ({ size = 22, color = '#000000', strokeWidth = 1.5 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
     <polyline points="14 2 14 8 20 8" />
     <line x1="8" y1="13" x2="16" y2="13" />
@@ -24,43 +25,41 @@ const IconDocument = ({ size = 22, color, strokeWidth = 1.5 }) => (
   </svg>
 );
 
-const IconUser = ({ size = 22, color, strokeWidth = 1.5 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || '#4A9ECF'} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+const IconUser = ({ size = 22, color = '#000000', strokeWidth = 1.5 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
     <circle cx="12" cy="7" r="4" />
   </svg>
 );
 
-const IconLightbulb = ({ size = 22, color, strokeWidth = 1.5 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || '#4A9ECF'} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+const IconLightbulb = ({ size = 22, color = '#000000', strokeWidth = 1.5 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 18h6" />
     <path d="M10 22h4" />
     <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14" />
   </svg>
 );
 
-const IconDownload = ({ size = 22, color, strokeWidth = 1.5 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || '#4A9ECF'} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+const IconDownload = ({ size = 22, color = '#000000', strokeWidth = 1.5 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="7 10 12 15 17 10" />
     <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );
 
-const IconLink = ({ size = 18, color, strokeWidth = 1.5 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || '#4A9ECF'} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+const IconLink = ({ size = 18, color = '#000000', strokeWidth = 1.5 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
   </svg>
 );
 
-const IconCheck = ({ size = 18, color, strokeWidth = 2 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || '#4A9ECF'} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+const IconCheck = ({ size = 18, color = '#000000', strokeWidth = 2 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
-
-import { colors } from '../theme/colors';
 
 const PageWrapper = styled.div`
   background: ${colors.bg};
@@ -204,9 +203,9 @@ const InfoItem = styled.div`
   align-items: flex-start;
   gap: 16px;
   padding: 20px;
-  background: ${props => props.$highlight ? 'rgba(139, 115, 85, 0.08)' : colors.bgSecondary};
+  background: ${props => props.$highlight ? 'rgba(37,99,235,0.08)' : colors.bgSecondary};
   border-radius: 12px;
-  border: 1px solid ${props => props.$highlight ? 'rgba(139, 115, 85, 0.2)' : 'transparent'};
+  border: 1px solid ${props => props.$highlight ? 'rgba(37,99,235,0.2)' : 'transparent'};
 `;
 
 const InfoIcon = styled.div`
@@ -598,7 +597,12 @@ const ResumeUpload = () => {
 
   const resolveCandidateFormUrl = (domainOverride = '') => {
     const ownerId = getCurrentOwnerId();
-    const ownerQuery = ownerId ? `?ownerId=${ownerId}` : '';
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams();
+    if (ownerId) params.set('ownerId', String(ownerId));
+    if (token) params.set('token', token);
+    const queryString = params.toString();
+    const ownerQuery = queryString ? `?${queryString}` : '';
     const manualBase = normalizeBaseUrl(domainOverride);
     if (manualBase) return `${manualBase}/candidate-form${ownerQuery}`;
 
