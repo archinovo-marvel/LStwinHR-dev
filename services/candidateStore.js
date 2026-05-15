@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { dbConfig, pool } = require('../db');
+const { KeyedMutex } = require('../server/utils/mutex');
 const {
   getDefaultPositionProfiles,
   normalizePositionConfig,
@@ -8,10 +9,9 @@ const {
 
 const DEFAULT_DB_PREFIX = process.env.CANDIDATE_DB_PREFIX || 'lstwin_candidates_user_';
 const initPromises = new Map();
-// Per-user mutex for createInterviewSessionForUser to prevent concurrent session races
-const _sessionCreateMutex = new Map();
-// Per-user mutex for upsertPositionForUser to prevent TOCTOU on name uniqueness check
-const _positionUpsertMutex = new Map();
+const _sessionCreateMutex = new KeyedMutex();
+const _positionUpsertMutex = new KeyedMutex();
+const _sessionUpsertMutex = new KeyedMutex();
 
 // TTL cache for information_schema candidate table list
 let _candidateTableCache = null;
@@ -42,6 +42,7 @@ async function getCandidateTableNames() {
 
 function invalidateCandidateTableCache() {
   _candidateTableCache = null;
+  _candidateTableCacheTs = 0;
 }
 
 const LIST_COLUMNS = [
@@ -558,6 +559,15 @@ async function ensureCandidateDatabase(userId) {
       invalidateCandidateTableCache();
       await pool.query(buildCreateInterviewSessionTableSql(interviewSessionTableName));
       await pool.query(buildCreatePositionTableSql(positionTableName));
+      // 创建全局候选人→用户反向索引表（P0修复：避免getCandidateByIdGlobal全表扫描）
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS candidate_owner_index (
+          candidate_id BIGINT NOT NULL PRIMARY KEY,
+          owner_user_id BIGINT NOT NULL,
+          table_name VARCHAR(128) NOT NULL,
+          INDEX idx_owner (owner_user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
       await ensureTableColumn(candidateTableName, 'position_description', 'TEXT NULL AFTER position');
       await ensureTableColumn(candidateTableName, 'position_profile', 'LONGTEXT NULL AFTER position_description');
       await cleanupAutoSeededPositions(normalizedUserId);
@@ -626,6 +636,65 @@ async function findCandidateBySnapshot(userId, snapshot) {
     const sameEmail = candidate.email && snapshot.email && candidate.email === snapshot.email;
     return sameId || (sameName && (samePhone || sameEmail));
   }) || null;
+}
+
+/**
+ * Lightweight upsert for immediate post-upload response.
+ * Only writes metadata fields (no file/blob/scores) so the client gets a
+ * candidateId right away. The full record is filled in later by a
+ * background upsertCandidateForUser call.
+ */
+async function upsertCandidateMinimal(userId, candidate) {
+  const normalizedUserId = normalizeUserId(userId);
+  await ensureCandidateDatabase(normalizedUserId);
+  const tableName = escapeIdentifier(getCandidateTableName(normalizedUserId));
+
+  const now = new Date();
+  const id = Number(candidate.id);
+
+  await pool.query(
+    `INSERT INTO ${tableName} (
+      id, owner_user_id, owner_user_name, owner_user_email,
+      name, position, phone, email, mbti, status,
+      resume_file_name, resume_original_name, resume_file_blob,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      name = VALUES(name),
+      position = VALUES(position),
+      phone = VALUES(phone),
+      email = VALUES(email),
+      mbti = VALUES(mbti),
+      status = VALUES(status),
+      resume_file_name = COALESCE(VALUES(resume_file_name), resume_file_name),
+      resume_original_name = COALESCE(VALUES(resume_original_name), resume_original_name),
+      resume_file_blob = COALESCE(VALUES(resume_file_blob), resume_file_blob),
+      updated_at = VALUES(updated_at)`,
+    [
+      id,
+      normalizedUserId,
+      candidate.ownerUserName || '',
+      candidate.ownerUserEmail || '',
+      candidate.name || '',
+      candidate.position || '',
+      candidate.phone || '',
+      candidate.email || '',
+      candidate.mbti || '',
+      candidate.status || '处理中',
+      candidate.resumeFileName || null,
+      candidate.resumeOriginalName || null,
+      candidate.resumeFileBuffer || null,
+      candidate.createdAt ? toDate(candidate.createdAt) : now,
+      now
+    ]
+  );
+
+  await pool.query(
+    `REPLACE INTO candidate_owner_index (candidate_id, owner_user_id, table_name) VALUES (?, ?, ?)`,
+    [id, normalizedUserId, getCandidateTableName(normalizedUserId)]
+  );
+
+  return { id, status: candidate.status || '处理中' };
 }
 
 async function upsertCandidateForUser(userId, candidate) {
@@ -727,53 +796,73 @@ async function upsertCandidateForUser(userId, candidate) {
     ]
   );
 
+  // 维护候选人→用户反向索引 (P0修复: O(1)查找替代全表扫描)
+  await pool.query(
+    `REPLACE INTO candidate_owner_index (candidate_id, owner_user_id, table_name) VALUES (?, ?, ?)`,
+    [row.id, normalizedUserId, getCandidateTableName(normalizedUserId)]
+  );
+
   return getCandidateById(normalizedUserId, row.id, { includeBlob: true });
 }
 
 async function getCandidateByIdGlobal(candidateId, options = {}) {
-  const tables = await getCandidateTableNames();
-  
-  for (const { TABLE_NAME } of tables) {
-    const tableName = escapeIdentifier(TABLE_NAME);
-    const [rows] = await pool.query(
-      `SELECT owner_user_id FROM ${tableName} WHERE id = ? LIMIT 1`,
-      [Number(candidateId)]
-    );
-    
-    if (rows.length > 0) {
-      const userId = rows[0].owner_user_id;
-      console.log(`[getCandidateByIdGlobal] 找到候选人, userId=${userId}, candidateId=${candidateId}, options=`, options);
-      const result = await getCandidateById(userId, candidateId, options);
-      console.log(`[getCandidateByIdGlobal] 获取结果:`, {
-        found: !!result,
-        hasBuffer: result ? !!result.resumeFileBuffer : false,
-        bufferSize: result && result.resumeFileBuffer ? result.resumeFileBuffer.length : 0
-      });
+  const { ownerId, ...queryOptions } = options;
+
+  // P0修复: 使用反向索引表O(1)查找，替代全表扫描
+  const [indexRows] = await pool.query(
+    'SELECT owner_user_id FROM candidate_owner_index WHERE candidate_id = ? LIMIT 1',
+    [Number(candidateId)]
+  );
+
+  if (indexRows.length) {
+    const userId = indexRows[0].owner_user_id;
+    console.log(`[getCandidateByIdGlobal] 找到候选人, userId=${userId}, candidateId=${candidateId}, options=`, queryOptions);
+    const result = await getCandidateById(userId, candidateId, queryOptions);
+    console.log(`[getCandidateByIdGlobal] 获取结果:`, {
+      found: !!result,
+      hasBuffer: result ? !!result.resumeFileBuffer : false,
+      bufferSize: result && result.resumeFileBuffer ? result.resumeFileBuffer.length : 0
+    });
+    return result;
+  }
+
+  // 回退：如果ownerId已知，直接从用户专属表查找并自动修复索引
+  if (ownerId) {
+    console.log(`[getCandidateByIdGlobal] 索引未命中，尝试ownerId回退, candidateId=${candidateId}, ownerId=${ownerId}`);
+    const result = await getCandidateById(ownerId, candidateId, queryOptions);
+    if (result) {
+      // 自动修复缺失的索引记录
+      await pool.query(
+        'REPLACE INTO candidate_owner_index (candidate_id, owner_user_id, table_name) VALUES (?, ?, ?)',
+        [Number(candidateId), normalizeUserId(ownerId), getCandidateTableName(normalizeUserId(ownerId))]
+      );
+      console.log(`[getCandidateByIdGlobal] 索引已修复, candidateId=${candidateId}, ownerId=${ownerId}`);
       return result;
     }
   }
-  
+
   console.log(`[getCandidateByIdGlobal] 未找到候选人, candidateId=${candidateId}`);
   return null;
 }
 
 async function updateCandidateById(candidateId, updateData) {
-  const tables = await getCandidateTableNames();
-  
-  for (const { TABLE_NAME } of tables) {
-    const tableName = escapeIdentifier(TABLE_NAME);
-    const [rows] = await pool.query(
-      `SELECT owner_user_id FROM ${tableName} WHERE id = ? LIMIT 1`,
-      [Number(candidateId)]
-    );
-    
-    if (rows.length > 0) {
-      const userId = rows[0].owner_user_id;
-      const normalizedUserId = normalizeUserId(userId);
-      await ensureCandidateDatabase(normalizedUserId);
-      
-      const setClauses = [];
-      const values = [];
+  // P0修复: 使用反向索引表O(1)查找，替代全表扫描
+  const [indexRows] = await pool.query(
+    'SELECT owner_user_id FROM candidate_owner_index WHERE candidate_id = ? LIMIT 1',
+    [Number(candidateId)]
+  );
+
+  if (!indexRows.length) {
+    return null;
+  }
+
+  const userId = indexRows[0].owner_user_id;
+  const normalizedUserId = normalizeUserId(userId);
+  await ensureCandidateDatabase(normalizedUserId);
+  const tableName = escapeIdentifier(getCandidateTableName(normalizedUserId));
+
+  const setClauses = [];
+  const values = [];
 
       const fieldMapping = {
         status: 'status',
@@ -799,13 +888,13 @@ async function updateCandidateById(candidateId, updateData) {
 
       const jsonFields = ['interviewDetails', 'interviewRecords', 'latestInterviewRecord', 'resumeAnalysisResult', 'resumeAnalysis'];
 
-      // _appendInterviewRecord: atomically appends one record to interview_records JSON array
+      // _appendInterviewRecord: 使用原子性 JSON_ARRAY_APPEND + COALESCE 避免并发覆盖
       if (updateData._appendInterviewRecord !== undefined) {
         const encoded = JSON.stringify(updateData._appendInterviewRecord);
         setClauses.push(
-          `interview_records = IF(interview_records IS NULL OR JSON_TYPE(interview_records) != 'ARRAY', JSON_ARRAY(?), JSON_ARRAY_APPEND(interview_records, '$', CAST(? AS JSON)))`
+          `interview_records = JSON_ARRAY_APPEND(COALESCE(interview_records, JSON_ARRAY()), '$', CAST(? AS JSON))`
         );
-        values.push(encoded, encoded);
+        values.push(encoded);
         setClauses.push('latest_interview_record = ?');
         values.push(encoded);
       }
@@ -833,24 +922,20 @@ async function updateCandidateById(candidateId, updateData) {
         }
       }
       
-      if (setClauses.length === 0) {
-        return null;
-      }
-      
-      setClauses.push('updated_at = ?');
-      values.push(new Date());
-      values.push(Number(candidateId));
-      
-      await pool.query(
-        `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = ?`,
-        values
-      );
-      
-      return getCandidateById(userId, candidateId);
-    }
+  if (setClauses.length === 0) {
+    return null;
   }
-  
-  return null;
+
+  setClauses.push('updated_at = ?');
+  values.push(new Date());
+  values.push(Number(candidateId));
+
+  await pool.query(
+    `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = ?`,
+    values
+  );
+
+  return getCandidateById(userId, candidateId);
 }
 
 async function deleteCandidateById(userId, candidateId) {
@@ -858,6 +943,8 @@ async function deleteCandidateById(userId, candidateId) {
   await ensureCandidateDatabase(normalizedUserId);
   const tableName = escapeIdentifier(getCandidateTableName(normalizedUserId));
   const [result] = await pool.query(`DELETE FROM ${tableName} WHERE id = ?`, [Number(candidateId)]);
+  // 同步删除反向索引条目
+  await pool.query('DELETE FROM candidate_owner_index WHERE candidate_id = ?', [Number(candidateId)]);
   return result.affectedRows;
 }
 
@@ -866,6 +953,8 @@ async function clearCandidatesForUser(userId) {
   await ensureCandidateDatabase(normalizedUserId);
   const tableName = escapeIdentifier(getCandidateTableName(normalizedUserId));
   const [result] = await pool.query(`DELETE FROM ${tableName}`);
+  // 同步删除该用户所有候选人的反向索引条目
+  await pool.query('DELETE FROM candidate_owner_index WHERE owner_user_id = ?', [normalizedUserId]);
   return result.affectedRows;
 }
 
@@ -1061,49 +1150,56 @@ async function createInterviewSessionForUser(userId, session) {
 
 async function upsertInterviewSessionForUser(userId, session) {
   const normalizedUserId = normalizeUserId(userId);
-  await ensureCandidateDatabase(normalizedUserId);
-  const tableName = escapeIdentifier(getInterviewSessionTableName(normalizedUserId));
-  const currentSession = Number.isFinite(Number(session?.id))
-    ? await getInterviewSessionById(normalizedUserId, session.id)
-    : null;
-  const mergedSession = mergeInterviewSessionForUpsert(currentSession, session, normalizedUserId);
-  const row = mapInterviewSessionToRow(mergedSession);
+  const lockKey = Number.isFinite(Number(session?.id)) ? `${normalizedUserId}:${session.id}` : null;
 
-  await pool.query(
-    `INSERT INTO ${tableName} (
-      id, owner_user_id, candidate_id, candidate_name, position, status,
-      conversation, scoring, metadata, start_time, end_time, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      owner_user_id = VALUES(owner_user_id),
-      candidate_id = VALUES(candidate_id),
-      candidate_name = VALUES(candidate_name),
-      position = VALUES(position),
-      status = VALUES(status),
-      conversation = VALUES(conversation),
-      scoring = VALUES(scoring),
-      metadata = VALUES(metadata),
-      start_time = VALUES(start_time),
-      end_time = VALUES(end_time),
-      updated_at = VALUES(updated_at)`,
-    [
-      row.id,
-      row.ownerUserId,
-      row.candidateId,
-      row.candidateName,
-      row.position,
-      row.status,
-      row.conversation,
-      row.scoring,
-      row.metadata,
-      row.startTime,
-      row.endTime,
-      row.createdAt,
-      row.updatedAt
-    ]
-  );
+  const doUpsert = async () => {
+    await ensureCandidateDatabase(normalizedUserId);
+    const tableName = escapeIdentifier(getInterviewSessionTableName(normalizedUserId));
+    const currentSession = Number.isFinite(Number(session?.id))
+      ? await getInterviewSessionById(normalizedUserId, session.id)
+      : null;
+    const mergedSession = mergeInterviewSessionForUpsert(currentSession, session, normalizedUserId);
+    const row = mapInterviewSessionToRow(mergedSession);
 
-  return getInterviewSessionById(normalizedUserId, row.id);
+    await pool.query(
+      `INSERT INTO ${tableName} (
+        id, owner_user_id, candidate_id, candidate_name, position, status,
+        conversation, scoring, metadata, start_time, end_time, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        owner_user_id = VALUES(owner_user_id),
+        candidate_id = VALUES(candidate_id),
+        candidate_name = VALUES(candidate_name),
+        position = VALUES(position),
+        status = VALUES(status),
+        conversation = VALUES(conversation),
+        scoring = VALUES(scoring),
+        metadata = VALUES(metadata),
+        start_time = VALUES(start_time),
+        end_time = VALUES(end_time),
+        updated_at = VALUES(updated_at)`,
+      [
+        row.id,
+        row.ownerUserId,
+        row.candidateId,
+        row.candidateName,
+        row.position,
+        row.status,
+        row.conversation,
+        row.scoring,
+        row.metadata,
+        row.startTime,
+        row.endTime,
+        row.createdAt,
+        row.updatedAt
+      ]
+    );
+
+    return getInterviewSessionById(normalizedUserId, row.id);
+  };
+
+  // Serialize concurrent upserts for the same session to prevent read-merge-write races
+  return lockKey ? _sessionUpsertMutex.withLock(lockKey, doUpsert) : doUpsert();
 }
 
 async function deleteInterviewSessionById(userId, sessionId) {
@@ -1135,6 +1231,7 @@ module.exports = {
   getCandidateById,
   getCandidateByIdGlobal,
   findCandidateBySnapshot,
+  upsertCandidateMinimal,
   upsertCandidateForUser,
   updateCandidateById,
   deleteCandidateById,

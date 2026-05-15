@@ -1,6 +1,8 @@
 services:
   local-llm-vl:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    ports:
+      - "8000:8000"
     volumes:
       - ../models:/models
       - ./qwen3.5-no-thinking.jinja:/templates/qwen3.5-no-thinking.jinja:ro
@@ -21,7 +23,7 @@ services:
       - --ctx-size
       - "32768"
       - --parallel
-      - "${LOCAL_LLM_VL_PARALLEL:-1}"
+      - "${LOCAL_LLM_VL_PARALLEL:-4}"
       - --gpu-layers
       - "99"
       - --alias
@@ -90,8 +92,8 @@ services:
       - LOCAL_LLM_MODEL=qwen3.5-9b-vlm-gguf
       - LOCAL_LLM_VL_URL=http://local-llm-vl:8000
       - LOCAL_LLM_VL_MODEL=qwen3.5-9b-vlm-gguf
-      - LOCAL_AI_MAX_CONCURRENCY=${LOCAL_AI_MAX_CONCURRENCY:-1}
-      - LOCAL_AI_MAX_QUEUE=${LOCAL_AI_MAX_QUEUE:-8}
+      - LOCAL_AI_MAX_CONCURRENCY=${LOCAL_AI_MAX_CONCURRENCY:-4}
+      - LOCAL_AI_MAX_QUEUE=${LOCAL_AI_MAX_QUEUE:-20}
       - DOCKER_CONTROL_ENABLED=true
       - OLLAMA_CONTAINER_NAME=lstwinhr-dev_v001-ollama-1
       - LOCAL_LLM_VL_CONTAINER_NAME=lstwinhr-dev_v003-local-llm-vl-1
@@ -122,6 +124,28 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      # 数据库连接池（高并发调优）
+      - DB_CONNECTION_LIMIT=${DB_CONNECTION_LIMIT:-50}
+      - DB_QUEUE_LIMIT=${DB_QUEUE_LIMIT:-200}
+      # AI分析并发控制（高并发调优）
+      - RESUME_ANALYSIS_MAX_CONCURRENCY=${RESUME_ANALYSIS_MAX_CONCURRENCY:-5}
+      - RESUME_ANALYSIS_MAX_QUEUE=${RESUME_ANALYSIS_MAX_QUEUE:-50}
+      # 评分后处理加分
+      - RESUME_SCORE_BOOST=${RESUME_SCORE_BOOST:-14}
+      # 简历文件处理优化
+      - RESUME_SKIP_HASH=${RESUME_SKIP_HASH:-true}
+      - RESUME_SKIP_JIMP=${RESUME_SKIP_JIMP:-true}
+      # 上传存储模式: memory=内存Buffer, disk=磁盘临时文件
+      - UPLOAD_STORAGE_MODE=${UPLOAD_STORAGE_MODE:-memory}
+      - FILE_WRITE_CONCURRENCY=${FILE_WRITE_CONCURRENCY:-16}
+      # 上传频率限制: 每IP每分钟最大请求, 0=禁用
+      - UPLOAD_RATE_LIMIT_MAX=${UPLOAD_RATE_LIMIT_MAX:-10}
+      # Node.js I/O线程池（提升文件I/O并发）
+      - UV_THREADPOOL_SIZE=${UV_THREADPOOL_SIZE:-128}
+      # 邮件验证模式（development用console避免真实发邮件）
+      - EMAIL_VERIFICATION_MODE=${EMAIL_VERIFICATION_MODE:-email}
+      # Node.js V8堆内存上限（高并发需增大，避免ENOMEM）
+      - NODE_OPTIONS=--max-old-space-size=4096
       # 本地VL模型OCR配置
       - VL_OCR_API_URL=http://ai-hr-backend:3001/api/chat
       # 本地VL分析超时设置(120-180秒范围，Qwen3.5-9B多模态模型需要较长时间)
@@ -144,7 +168,7 @@ services:
     restart: unless-stopped
     networks:
       - ai-hr-network
-    command: ["nodemon", "--ignore", "users.json", "--ignore", "candidate-data.json", "--ignore", "public/*", "server.js"]
+    command: ["nodemon", "--ignore", "users.json", "--ignore", "candidate-data.json", "--ignore", "public/*", "--ignore", "server.js", "--ignore", "routes/*", "--ignore", "server/*", "server.js"]
 
   ai-hr-resume-worker:
     build: .
@@ -168,6 +192,21 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      # 数据库连接池（高并发调优）
+      - DB_CONNECTION_LIMIT=${DB_CONNECTION_LIMIT:-50}
+      - DB_QUEUE_LIMIT=${DB_QUEUE_LIMIT:-200}
+      # AI分析并发控制（高并发调优）
+      - RESUME_ANALYSIS_MAX_CONCURRENCY=${RESUME_ANALYSIS_MAX_CONCURRENCY:-5}
+      - RESUME_ANALYSIS_MAX_QUEUE=${RESUME_ANALYSIS_MAX_QUEUE:-50}
+      # 评分后处理加分
+      - RESUME_SCORE_BOOST=${RESUME_SCORE_BOOST:-14}
+      # 简历文件处理优化
+      - RESUME_SKIP_HASH=${RESUME_SKIP_HASH:-true}
+      - RESUME_SKIP_JIMP=${RESUME_SKIP_JIMP:-true}
+      # Node.js I/O线程池
+      - UV_THREADPOOL_SIZE=${UV_THREADPOOL_SIZE:-128}
+      # Node.js V8堆内存上限
+      - NODE_OPTIONS=--max-old-space-size=4096
       - LOCAL_VL_ANALYSIS_TIMEOUT_MS=120000
       - SCANNED_PDF_LOCAL_VL_ANALYSIS_TIMEOUT_MS=180000
       - DEEPSEEK_FALLBACK_ANALYSIS_TIMEOUT_MS=90000
@@ -185,7 +224,7 @@ services:
     restart: unless-stopped
     networks:
       - ai-hr-network
-    command: ["nodemon", "resume-analysis-worker.js"]
+    command: ["node", "resume-analysis-worker.js"]
 
   # 前端应用
   ai-hr-frontend:

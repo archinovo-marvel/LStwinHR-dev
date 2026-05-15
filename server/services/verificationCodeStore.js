@@ -33,10 +33,9 @@ function createMemoryStore() {
 }
 
 function createVerificationCodeStore() {
-  const fallbackStore = createMemoryStore();
-
   if (STORE_MODE === 'memory') {
     console.warn('[verification-code-store] 当前使用内存存储，验证码在多实例下不会共享');
+    const fallbackStore = createMemoryStore();
     return fallbackStore;
   }
 
@@ -44,8 +43,8 @@ function createVerificationCodeStore() {
   try {
     IORedis = require('ioredis');
   } catch (e) {
-    console.warn('[verification-code-store] ioredis未安装，回退到内存存储');
-    return fallbackStore;
+    console.error('[verification-code-store] ioredis未安装，验证码服务不可用');
+    throw new Error('验证码服务不可用：ioredis 依赖缺失');
   }
 
   const redis = new IORedis(REDIS_URL, {
@@ -58,13 +57,12 @@ function createVerificationCodeStore() {
 
   redis.on('error', error => {
     console.error('[verification-code-store] Redis异常:', error.message);
+    fallbackMode = true;
   });
 
   redis.on('ready', () => {
-    if (fallbackMode) {
-      fallbackMode = false;
-      console.log('[verification-code-store] Redis恢复连接，退出内存回退模式');
-    }
+    fallbackMode = false;
+    console.log('[verification-code-store] Redis连接就绪');
   });
 
   async function getRedisClient() {
@@ -79,7 +77,7 @@ function createVerificationCodeStore() {
       return redis;
     } catch (error) {
       fallbackMode = true;
-      console.warn('[verification-code-store] Redis不可用，回退到内存存储 (将在连接恢复后自动切回):', error.message);
+      console.warn('[verification-code-store] Redis不可用，请求将返回错误 (将在连接恢复后自动切回):', error.message);
       return null;
     }
   }
@@ -92,7 +90,7 @@ function createVerificationCodeStore() {
     async get(email) {
       const client = await getRedisClient();
       if (!client) {
-        return fallbackStore.get(email);
+        throw new Error('验证码服务暂不可用，请稍后重试');
       }
 
       const rawValue = await client.get(buildKey(email));
@@ -110,7 +108,7 @@ function createVerificationCodeStore() {
     async set(email, value) {
       const client = await getRedisClient();
       if (!client) {
-        return fallbackStore.set(email, value);
+        throw new Error('验证码服务暂不可用，请稍后重试');
       }
 
       const ttlMs = Math.max(1000, Number(value?.expiry || 0) - Date.now());
@@ -121,14 +119,13 @@ function createVerificationCodeStore() {
     async delete(email) {
       const client = await getRedisClient();
       if (!client) {
-        return fallbackStore.delete(email);
+        throw new Error('验证码服务暂不可用，请稍后重试');
       }
 
       await client.del(buildKey(email));
       return true;
     },
     async close() {
-      await fallbackStore.close();
       if (fallbackMode) {
         return;
       }

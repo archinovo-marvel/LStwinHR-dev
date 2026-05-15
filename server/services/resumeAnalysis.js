@@ -123,6 +123,8 @@ function getDeepSeekFallbackTimeoutMs(fileExt, options = {}) {
 }
 
 async function runResumeAnalysisInBackground(candidateId, options = {}) {
+  // Dedup check and .set() are in the same synchronous block (no await between them),
+  // so this is atomic under Node.js single-threaded model.
   if (activeResumeAnalysisJobs.has(candidateId)) return activeResumeAnalysisJobs.get(candidateId);
   const { renameAfterAnalysis = false, trigger = 'auto' } = options;
   if (trigger === 'auto' && manualResumeAnalysisJobs.size > 0) return;
@@ -163,7 +165,15 @@ async function runResumeAnalysisInBackground(candidateId, options = {}) {
           cachedExtractedText = normalizedText; cachedExtractedMeta = meta;
         }
       };
-      const localVLEnabled = process.env.LOCAL_LLM_ENABLED === 'true';
+      const mode = options.mode || 'default';
+      // mode=deepseek 强制跳过本地VL，直接使用DeepSeek
+      // mode=local-vl 强制使用本地VL（仍允许DeepSeek兜底）
+      // mode=default 遵循 LOCAL_LLM_ENABLED 环境变量
+      const localVLEnabled = mode === 'local-vl'
+        ? true
+        : mode === 'deepseek'
+          ? false
+          : process.env.LOCAL_LLM_ENABLED === 'true';
       // 构建 candidateProfile 包含 MBTI 类型
       const candidateProfile = { mbti: candidate.mbti, name: candidate.name, position: candidate.position };
       if (localVLEnabled) {

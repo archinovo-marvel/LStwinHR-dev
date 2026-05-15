@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Select, message } from 'antd';
 import styled, { createGlobalStyle } from 'styled-components';
+import { motion } from 'framer-motion';
+import { ClockCircleOutlined } from '@ant-design/icons';
 import VirtualHumanSDK from '../components/VirtualHumanSDK';
 import { virtualHumanConfig } from '../config/virtualHumanConfig';
 import CandidateSelector from '../components/CandidateSelector';
@@ -86,7 +88,7 @@ const PageWrapper = styled.div`
 `;
 const PageHeader = styled.header` padding: 120px 60px 32px; border-bottom: 1px solid ${colors.border}; `;
 const HeaderInner = styled.div` max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-end; `;
-const PageTitle = styled.h1` font-family: 'Noto Serif SC', Georgia, serif; font-size: clamp(32px,4vw,48px); font-weight: 400; color: ${colors.text}; margin: 0 0 16px 0; line-height: 1.2; `;
+const PageTitle = styled(motion.h1)` font-family: 'Noto Serif SC', Georgia, serif; font-size: clamp(32px,4vw,48px); font-weight: 400; color: ${colors.text}; margin: 0 0 16px 0; line-height: 1.2; `;
 const PageSubtitle = styled.p` font-size: 15px; color: ${colors.textMuted}; margin: 0; `;
 const RuntimeBadge = styled.div`
   display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px;
@@ -139,6 +141,53 @@ const InterviewActionBtn = styled.button`
   &:active { transform: translateY(0); }
 `;
 
+// 右侧栏分区样式（参照 /personal/interview 侧边栏布局）
+const RightColumnSection = styled.div`
+  margin-bottom: 16px;
+`;
+const RightColumnTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${colors.text};
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid ${colors.border};
+`;
+const RightColumnIcon = styled.div`
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: ${colors.accentSub};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  .anticon {
+    font-size: 14px;
+    color: ${colors.accent};
+  }
+`;
+const InterviewTimeCard = styled.div`
+  background: ${colors.surface};
+  border: 1px solid ${colors.border};
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+`;
+const InterviewTimeValue = styled.div`
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 600;
+  color: ${colors.text};
+  margin-bottom: 4px;
+`;
+const InterviewTimeLabel = styled.div`
+  font-size: 12px;
+  color: ${colors.textMuted};
+`;
+
 const ChatPage = () => {
   // ---- 纯 UI 状态（非面试相关） ----
   const [messages, setMessages] = useState([]);
@@ -158,6 +207,8 @@ const ChatPage = () => {
   const [ttsConfig, setTtsConfig] = useState({ voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' });
   const [completedInterviewCandidate, setCompletedInterviewCandidate] = useState(null);
   const interviewStateRef = useRef({ isActive: false, isWaitingForAnswer: false });
+  const [interviewStartTime, setInterviewStartTime] = useState(null);
+  const [interviewElapsedSeconds, setInterviewElapsedSeconds] = useState(0);
 
   // ---- Refs ----
   const chatContainerRef = useRef(null);
@@ -243,6 +294,24 @@ const ChatPage = () => {
       isWaitingForAnswer: interview.isWaitingForAnswer,
     };
   }, [interview.isActive, interview.isWaitingForAnswer]);
+
+  // ---- 面试计时 ----
+  useEffect(() => {
+    if (!interviewStartTime) {
+      setInterviewElapsedSeconds(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setInterviewElapsedSeconds(Math.floor((Date.now() - interviewStartTime) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [interviewStartTime]);
+
+  const formatElapsedTime = useCallback((seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }, []);
 
   // ---- 派生值 ----
   const currentRounds = Math.floor(messages.filter(msg => msg.type === 'user').length);
@@ -331,6 +400,7 @@ const ChatPage = () => {
     if (entryCandidate) {
       setShowCandidateSelector(false);
       await interview.startInterview(entryCandidate);
+      setInterviewStartTime(Date.now());
     } else {
       setShowCandidateSelector(true);
     }
@@ -338,6 +408,7 @@ const ChatPage = () => {
   const handleCandidateSelect = async (candidate) => {
     setEntryCandidate(candidate);
     await interview.startInterview(candidate);
+    setInterviewStartTime(Date.now());
   };
 
   // ---- 结束面试 ----
@@ -349,6 +420,7 @@ const ChatPage = () => {
     }
     if (result?.candidate) setCompletedInterviewCandidate(result.candidate);
     message.info('面试已结束');
+    setInterviewStartTime(null);
   };
 
   // ---- 发送消息 ----
@@ -493,7 +565,7 @@ const ChatPage = () => {
       <PageHeader className="page-header">
         <HeaderInner>
           <div>
-            <PageTitle>招聘灵犀</PageTitle>
+            <PageTitle initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>招聘灵犀</PageTitle>
             <PageSubtitle>为您提供专业的AI数字人面试服务</PageSubtitle>
           </div>
           <RuntimeBadge>
@@ -562,6 +634,20 @@ const ChatPage = () => {
         </ChatCard>
 
         <RightColumn>
+          {isAnyInterviewActive && (
+            <RightColumnSection>
+              <RightColumnTitle>
+                <RightColumnIcon>
+                  <ClockCircleOutlined />
+                </RightColumnIcon>
+                面试计时
+              </RightColumnTitle>
+              <InterviewTimeCard>
+                <InterviewTimeValue>{formatElapsedTime(interviewElapsedSeconds)}</InterviewTimeValue>
+                <InterviewTimeLabel>已进行时间</InterviewTimeLabel>
+              </InterviewTimeCard>
+            </RightColumnSection>
+          )}
           <InterviewActionBtnWrapper>
             {!isAnyInterviewActive ? (
               <InterviewActionBtn onClick={handleStartInterviewClick}>

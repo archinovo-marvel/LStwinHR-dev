@@ -1,30 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 
-// In-memory login rate limiter: max 10 attempts per 15 minutes per IP
-const _loginAttempts = new Map();
-let _loginAttemptsSweepTs = 0;
-function checkLoginRateLimit(ip) {
-  const now = Date.now();
-  const windowMs = 15 * 60 * 1000;
-  const maxAttempts = 10;
-
-  // Sweep stale entries at most once per minute to prevent unbounded Map growth
-  if (now - _loginAttemptsSweepTs > 60 * 1000) {
-    _loginAttemptsSweepTs = now;
-    for (const [key, val] of _loginAttempts) {
-      if (now - val.windowStart > windowMs) _loginAttempts.delete(key);
-    }
-  }
-
-  let entry = _loginAttempts.get(ip);
-  if (!entry || now - entry.windowStart > windowMs) {
-    entry = { count: 0, windowStart: now };
-    _loginAttempts.set(ip, entry);
-  }
-  entry.count++;
-  return entry.count <= maxAttempts;
-}
+const { checkLoginRateLimit, resetLoginAttempts } = require('../server/utils/loginRateLimit');
 
 function createAuthRouter({
   pool,
@@ -69,7 +46,7 @@ function createAuthRouter({
         return res.status(401).json({ message: '用户名或密码错误' });
       }
 
-      _loginAttempts.delete(ip);
+      resetLoginAttempts(ip);
 
       await ensureCandidateDatabase(user.id);
 

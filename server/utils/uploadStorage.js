@@ -21,12 +21,11 @@ async function ensureTempUploadDir() {
 function createDiskUpload({ fileSize, allowedTypes, errorMessage }) {
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      try {
-        ensureTempUploadDir();
+      ensureTempUploadDir().then(() => {
         cb(null, TEMP_UPLOAD_DIR);
-      } catch (error) {
+      }).catch(error => {
         cb(error);
-      }
+      });
     },
     filename: (req, file, cb) => {
       const extension = path.extname(file.originalname || '').toLowerCase();
@@ -77,9 +76,42 @@ async function cleanupUploadedFile(file) {
   await fsPromises.unlink(file.path).catch(() => {});
 }
 
+function createMemoryUpload({ fileSize, allowedTypes, errorMessage }) {
+  const storage = multer.memoryStorage();
+
+  return multer({
+    storage,
+    limits: { fileSize },
+    fileFilter: (req, file, cb) => {
+      const extension = path.extname(file.originalname || '').toLowerCase();
+      if (allowedTypes.includes(extension)) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error(errorMessage));
+    }
+  });
+}
+
+/**
+ * Factory: selects memoryStorage or diskStorage based on UPLOAD_STORAGE_MODE env var.
+ * - 'memory' (default): files kept in memory as Buffer — avoids disk I/O bottleneck
+ *   under high concurrency (no temp file writes, no rename dance).
+ * - 'disk': legacy behavior, files written to uploads/tmp/ by Multer.
+ */
+function createUpload(opts) {
+  const mode = process.env.UPLOAD_STORAGE_MODE || 'memory';
+  if (mode === 'disk') {
+    return createDiskUpload(opts);
+  }
+  return createMemoryUpload(opts);
+}
+
 module.exports = {
   TEMP_UPLOAD_DIR,
   createDiskUpload,
+  createMemoryUpload,
+  createUpload,
   loadUploadedFileBuffer,
   cleanupUploadedFile
 };

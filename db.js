@@ -13,8 +13,10 @@ function parsePositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-const MAIN_DB_CONNECTION_LIMIT = parsePositiveInt(process.env.DB_CONNECTION_LIMIT, 10);
-const MAIN_DB_QUEUE_LIMIT = parsePositiveInt(process.env.DB_QUEUE_LIMIT, 100);
+const MAIN_DB_CONNECTION_LIMIT = parsePositiveInt(process.env.DB_CONNECTION_LIMIT, 50);
+const MAIN_DB_QUEUE_LIMIT = parsePositiveInt(process.env.DB_QUEUE_LIMIT, 200);
+const DB_ACQUIRE_TIMEOUT_MS = parsePositiveInt(process.env.DB_ACQUIRE_TIMEOUT_MS, 10000);
+const DB_CONNECT_TIMEOUT_MS = parsePositiveInt(process.env.DB_CONNECT_TIMEOUT_MS, 10000);
 const PERSONAL_DB_CONNECTION_LIMIT = parsePositiveInt(process.env.PERSONAL_DB_CONNECTION_LIMIT, 3);
 const PERSONAL_DB_POOL_MAX = parsePositiveInt(process.env.PERSONAL_DB_POOL_MAX, 20);
 const PERSONAL_DB_POOL_IDLE_MS = parsePositiveInt(process.env.PERSONAL_DB_POOL_IDLE_MS, 10 * 60 * 1000);
@@ -35,7 +37,9 @@ const dbConfig = {
   charset: 'utf8mb4',
   waitForConnections: true,
   connectionLimit: MAIN_DB_CONNECTION_LIMIT,
-  queueLimit: MAIN_DB_QUEUE_LIMIT
+  queueLimit: MAIN_DB_QUEUE_LIMIT,
+  acquireTimeout: DB_ACQUIRE_TIMEOUT_MS,
+  connectTimeout: DB_CONNECT_TIMEOUT_MS
 };
 
 const pool = mysql.createPool(dbConfig);
@@ -213,6 +217,8 @@ const testConnection = async () => {
 };
 
 // 获取个人用户数据库连接池
+// Note: 此函数为同步函数，在 Node.js 单线程模型中 has()→set() 之间无 await，
+// 因此不会产生竞态条件。若将来改为异步或使用 worker threads，需引入 inflight 去重。
 function getPersonalUserDB(userId) {
   // Validate userId is numeric
   if (!userId || !/^\d+$/.test(String(userId))) {
@@ -245,7 +251,6 @@ function getPersonalUserDB(userId) {
   });
 
   const personalPoolEntry = createManagedPersonalPool(cacheKey, rawPersonalPool);
-
   personalPoolCache.set(cacheKey, personalPoolEntry);
   return personalPoolEntry.managedPool;
 }

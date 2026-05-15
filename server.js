@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -8,13 +9,18 @@ const crypto = require('crypto');
 // 数据文件路径
 const DATA_FILE = path.join(__dirname, 'candidate-data.json');
 
-// 确保数据文件存在
+// 确保数据文件存在（inflight 去重防止并发创建竞态）
+let _ensureDataFilePromise = null;
 async function ensureDataFile() {
-  try {
-    await fs.access(DATA_FILE);
-  } catch (error) {
-    await fs.writeFile(DATA_FILE, JSON.stringify([]));
-  }
+  if (_ensureDataFilePromise) return _ensureDataFilePromise;
+  _ensureDataFilePromise = (async () => {
+    try {
+      await fs.access(DATA_FILE);
+    } catch (error) {
+      await fs.writeFile(DATA_FILE, JSON.stringify([]));
+    }
+  })().finally(() => { _ensureDataFilePromise = null; });
+  return _ensureDataFilePromise;
 }
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
@@ -22,7 +28,7 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const { createDiskUpload } = require('./server/utils/uploadStorage');
+const { createUpload } = require('./server/utils/uploadStorage');
 let Jimp;
 try {
   Jimp = require('jimp');
@@ -37,6 +43,7 @@ const {
   getCandidateById,
   getCandidateByIdGlobal,
   findCandidateBySnapshot,
+  upsertCandidateMinimal,
   upsertCandidateForUser,
   updateCandidateById,
   deleteCandidateById,
@@ -119,7 +126,7 @@ const LOCAL_MODEL_REGISTRY = {
   }
 };
 
-const upload = createDiskUpload({
+const upload = createUpload({
   fileSize: 10 * 1024 * 1024,
   allowedTypes: ['.pdf', '.doc', '.docx', '.jpg', '.jpeg'],
   errorMessage: '只支持PDF、Word、JPG格式文件'
@@ -129,6 +136,16 @@ const upload = createDiskUpload({
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
 app.use(cors({ origin: corsOrigin, credentials: false }));
 app.use('/uploads', express.static('uploads'));
+
+// 全局 API 速率限制: 每 IP 每分钟 100 次请求
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '请求过于频繁，请稍后重试' }
+});
+app.use('/api', globalLimiter);
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
@@ -1212,7 +1229,7 @@ testConnection().then(ok => {
     });
   });
 
-  app.listen(PORT, () => {
-    console.log(`数据服务器运行在 http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', 1023, () => {
+    console.log(`数据服务器运行在 http://localhost:${PORT} (backlog=1023)`);
   });
 });

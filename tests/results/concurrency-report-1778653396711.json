@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-05-13T06:23:16.711Z",
+  "analysis": {
+    "scenario": "综合",
+    "total": 200,
+    "success": 120,
+    "failed": 80,
+    "successRate": "60.0%",
+    "timing": {
+      "min": "7072ms",
+      "max": "30649ms",
+      "avg": "21382ms",
+      "p50": "21310ms",
+      "p90": "30564ms",
+      "p95": "30625ms",
+      "p99": "30640ms"
+    },
+    "statusCodes": {
+      "0": 80,
+      "200": 120
+    },
+    "errorTypes": {
+      "ECONNRESET": 80
+    },
+    "throughput": "3.92 req/s (peak)"
+  },
+  "batchStats": [
+    {
+      "total": 200,
+      "success": 120,
+      "failed": 80,
+      "batchTime": 30545
+    }
+  ],
+  "overallTotalTime": 30936
+}

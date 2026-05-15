@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-05-13T05:26:36.044Z",
+  "analysis": {
+    "scenario": "综合",
+    "total": 150,
+    "success": 150,
+    "failed": 0,
+    "successRate": "100.0%",
+    "timing": {
+      "min": "1029ms",
+      "max": "17535ms",
+      "avg": "8073ms",
+      "p50": "6393ms",
+      "p90": "16349ms",
+      "p95": "17053ms",
+      "p99": "17529ms"
+    },
+    "statusCodes": {
+      "200": 150
+    },
+    "errorTypes": {},
+    "throughput": "8.55 req/s (peak)"
+  },
+  "batchStats": [
+    {
+      "total": 50,
+      "success": 50,
+      "failed": 0,
+      "batchTime": 17527
+    },
+    {
+      "total": 50,
+      "success": 50,
+      "failed": 0,
+      "batchTime": 12644
+    },
+    {
+      "total": 50,
+      "success": 50,
+      "failed": 0,
+      "batchTime": 14481
+    }
+  ],
+  "overallTotalTime": 45977
+}

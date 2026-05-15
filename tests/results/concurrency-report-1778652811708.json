@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-05-13T06:13:31.708Z",
+  "analysis": {
+    "scenario": "综合",
+    "total": 200,
+    "success": 165,
+    "failed": 35,
+    "successRate": "82.5%",
+    "timing": {
+      "min": "2419ms",
+      "max": "4703ms",
+      "avg": "3648ms",
+      "p50": "3885ms",
+      "p90": "4305ms",
+      "p95": "4438ms",
+      "p99": "4670ms"
+    },
+    "statusCodes": {
+      "200": 165,
+      "500": 35
+    },
+    "errorTypes": {
+      "HTTP_500": 35
+    },
+    "throughput": "35.08 req/s (peak)"
+  },
+  "batchStats": [
+    {
+      "total": 200,
+      "success": 165,
+      "failed": 35,
+      "batchTime": 4496
+    }
+  ],
+  "overallTotalTime": 4854
+}

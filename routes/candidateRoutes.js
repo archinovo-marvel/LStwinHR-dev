@@ -1,7 +1,11 @@
 const express = require('express');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs').promises;
 const fsSync = require('fs');
+const { KeyedMutex } = require('../server/utils/mutex');
+
+const _dataFileMutex = new KeyedMutex();
 
 function createCandidateRouter({
   authMiddleware,
@@ -19,6 +23,17 @@ function createCandidateRouter({
   DATA_FILE
 }) {
   const router = express.Router();
+
+  // 上传接口速率限制: 通过环境变量 UPLOAD_RATE_LIMIT_MAX 控制, 设 0 禁用
+  const _uploadLimitMax = Math.max(0, Number(process.env.UPLOAD_RATE_LIMIT_MAX ?? 10));
+  const uploadLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: _uploadLimitMax || 1,
+    skip: _uploadLimitMax === 0 ? () => true : undefined,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: '上传过于频繁，请稍后重试' }
+  });
 
   // 获取工作流列表
   router.get('/workflows', async (req, res) => {
@@ -146,18 +161,16 @@ function createCandidateRouter({
     }
   });
 
-  router.post('/candidates', authMiddleware, upload.single('resume'), async (req, res) => {
-    res.setTimeout(180000);
-
+  router.post('/candidates', authMiddleware, uploadLimiter, upload.single('resume'), async (req, res) => {
     try {
-      const candidate = await createCandidateSubmission({
+      const result = await createCandidateSubmission({
         body: req.body,
         file: req.file,
         owner: req.user,
         source: 'authenticated'
       });
 
-      res.json({ success: true, candidate });
+      res.status(202).json(result);
     } catch (error) {
       console.error('保存候选人数据失败:', error);
       const statusCode = error.statusCode || 500;
@@ -169,11 +182,9 @@ function createCandidateRouter({
     }
   });
 
-  router.post('/public/candidates', publicSubmissionMiddleware, upload.single('resume'), async (req, res) => {
-    res.setTimeout(180000);
-
+  router.post('/public/candidates', publicSubmissionMiddleware, uploadLimiter, upload.single('resume'), async (req, res) => {
     try {
-      const candidate = await createCandidateSubmission({
+      const result = await createCandidateSubmission({
         body: req.body,
         file: req.file,
         owner: {
@@ -184,7 +195,7 @@ function createCandidateRouter({
         source: 'public'
       });
 
-      res.json({ success: true, candidate });
+      res.status(202).json(result);
     } catch (error) {
       console.error('公开投递保存失败:', error);
       const statusCode = error.statusCode || 500;
@@ -257,11 +268,13 @@ function createCandidateRouter({
   if (getInvalidCandidates && ensureDataFile) {
     router.get('/candidates/cleanup-invalid-preview', authMiddleware, async (req, res) => {
       try {
-        await ensureDataFile();
-        const data = await fs.readFile(DATA_FILE, 'utf8');
-        const candidates = JSON.parse(data);
-        const invalidCandidates = await getInvalidCandidates(candidates);
-        res.json({ success: true, count: invalidCandidates.length, candidates: invalidCandidates });
+        const result = await _dataFileMutex.withLock(DATA_FILE, async () => {
+          await ensureDataFile();
+          const data = await fs.readFile(DATA_FILE, 'utf8');
+          const candidates = JSON.parse(data);
+          return await getInvalidCandidates(candidates);
+        });
+        res.json({ success: true, count: result.length, candidates: result });
       } catch (error) {
         console.error('预览无效候选人清理失败:', error);
         res.status(500).json({ error: '预览无效候选人清理失败' });
@@ -270,21 +283,24 @@ function createCandidateRouter({
 
     router.delete('/candidates/cleanup-invalid', authMiddleware, async (req, res) => {
       try {
-        await ensureDataFile();
-        const data = await fs.readFile(DATA_FILE, 'utf8');
-        const candidates = JSON.parse(data);
-        const invalidCandidates = await getInvalidCandidates(candidates);
-        if (invalidCandidates.length === 0) {
-          return res.json({ success: true, removedCount: 0, removedCandidates: [] });
-        }
-        const invalidIds = new Set(invalidCandidates.map(c => c.id));
-        const removedCandidates = candidates.filter(c => invalidIds.has(c.id));
-        const validCandidates = candidates.filter(c => !invalidIds.has(c.id));
-        for (const candidate of removedCandidates) {
-          await removeCandidateResumeFile(candidate);
-        }
-        await fs.writeFile(DATA_FILE, JSON.stringify(validCandidates, null, 2));
-        res.json({ success: true, removedCount: removedCandidates.length, removedCandidates: invalidCandidates });
+        const result = await _dataFileMutex.withLock(DATA_FILE, async () => {
+          await ensureDataFile();
+          const data = await fs.readFile(DATA_FILE, 'utf8');
+          const candidates = JSON.parse(data);
+          const invalidCandidates = await getInvalidCandidates(candidates);
+          if (invalidCandidates.length === 0) {
+            return { removedCount: 0, removedCandidates: [] };
+          }
+          const invalidIds = new Set(invalidCandidates.map(c => c.id));
+          const removedCandidates = candidates.filter(c => invalidIds.has(c.id));
+          const validCandidates = candidates.filter(c => !invalidIds.has(c.id));
+          for (const candidate of removedCandidates) {
+            await removeCandidateResumeFile(candidate);
+          }
+          await fs.writeFile(DATA_FILE, JSON.stringify(validCandidates, null, 2));
+          return { removedCount: removedCandidates.length, removedCandidates: invalidCandidates };
+        });
+        res.json({ success: true, ...result });
       } catch (error) {
         console.error('清理无效候选人失败:', error);
         res.status(500).json({ error: '清理无效候选人失败' });

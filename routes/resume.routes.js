@@ -67,7 +67,7 @@ function createResumeRouter({ ensureDataFile, scheduleResumeAnalysis } = {}) {
 
       await ensureCandidateDatabase(owner.id);
 
-      const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: false });
+      const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: false, ownerId: owner.id });
 
       if (!candidate) {
         return res.status(404).send('候选人不存在');
@@ -352,7 +352,7 @@ function createResumeRouter({ ensureDataFile, scheduleResumeAnalysis } = {}) {
       console.log(`开始分析简历，候选人ID: ${candidateId}`);
 
       // Get candidate from database
-      const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: true });
+      const candidate = await getCandidateByIdGlobal(candidateId, { includeBlob: true, ownerId: owner.id });
 
       if (!candidate) {
         return res.status(404).json({ error: '候选人不存在' });
@@ -392,7 +392,8 @@ function createResumeRouter({ ensureDataFile, scheduleResumeAnalysis } = {}) {
       });
 
       if (scheduleResumeAnalysis) {
-        scheduleResumeAnalysis(candidateId, { renameAfterAnalysis: false, forceReanalyze, trigger: 'manual' });
+        const mode = req.body?.mode || 'default';
+        scheduleResumeAnalysis(candidateId, { renameAfterAnalysis: false, forceReanalyze, trigger: 'manual', mode });
       }
 
       res.status(202).json({

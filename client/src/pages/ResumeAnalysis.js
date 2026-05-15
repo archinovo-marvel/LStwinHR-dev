@@ -871,11 +871,17 @@ const ResumeAnalysis = () => {
     message.loading({ content: `正在使用${modeLabels[mode]}重新分析简历，请稍候...`, key: loadingKey, duration: 0 });
 
     try {
+      const statusMap = {
+        'deepseek': { status: 'DeepSeek API排队中', recommendation: '正在加入DeepSeek API分析队列' },
+        'local-vl': { status: 'Qwen3.5-9B排队中', recommendation: '正在加入Qwen3.5-9B串行队列' },
+        'default': { status: '排队中', recommendation: '正在加入分析队列' }
+      };
+      const modeStatus = statusMap[mode] || statusMap['default'];
       setCandidates(prev => prev.map(item =>
         item.id === candidate.id ? {
           ...item,
-          status: 'Qwen3.5-9B排队中',
-          recommendation: '正在加入Qwen3.5-9B串行队列',
+          status: modeStatus.status,
+          recommendation: modeStatus.recommendation,
           resumeAnalysis: null,
           resumeAnalysisResult: null,
           analysisDetails: { ...item.analysisDetails, resumeAnalysis: null }

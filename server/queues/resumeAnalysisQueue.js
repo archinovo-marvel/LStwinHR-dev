@@ -58,7 +58,7 @@ async function enqueueResumeAnalysis(candidateId, options = {}) {
   }
 
   const queue = getResumeAnalysisQueue();
-  const jobId = `resume-analysis:${normalizedCandidateId}`;
+  const jobId = `resume-analysis-${normalizedCandidateId}`;
   const existingJob = await queue.getJob(jobId);
 
   if (existingJob) {

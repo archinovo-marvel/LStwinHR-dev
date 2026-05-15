@@ -1,13 +1,33 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 const { loadUploadedFileBuffer, cleanupUploadedFile } = require('./uploadStorage');
+
+// ——— File write semaphore ———
+// Limits concurrent disk writes to avoid exhausting kernel I/O buffers.
+// Under high concurrency, 200+ simultaneous fs.writeFile calls trigger ENOMEM
+// on WSL2. This gate serializes writes so only N happen at once.
+const FILE_WRITE_LIMIT = parseInt(process.env.FILE_WRITE_CONCURRENCY, 10) || Math.max(4, os.cpus().length * 4);
+let _writeActive = 0;
+const _writeQueue = [];
+
+function _acquireWriteSlot() {
+  if (_writeActive < FILE_WRITE_LIMIT) { _writeActive++; return Promise.resolve(); }
+  return new Promise(r => { _writeQueue.push(r); });
+}
+
+function _releaseWriteSlot() {
+  _writeActive--;
+  const next = _writeQueue.shift();
+  if (next) { _writeActive++; next(); }
+}
 
 let Jimp;
 try { Jimp = require('jimp'); } catch (e) { /* Jimp not available */ }
 
-const { ensureCandidateDatabase, upsertCandidateForUser, generateCandidateId } = require('../../services/candidateStore');
+const { ensureCandidateDatabase, upsertCandidateMinimal, upsertCandidateForUser, generateCandidateId, updateCandidateById } = require('../../services/candidateStore');
 const { scheduleResumeAnalysis } = require('../services/resumeAnalysis');
 
 function sanitizeFileNamePart(value, fallback = '未命名') {
@@ -118,12 +138,61 @@ function calculateCandidateScores(candidate, resumeAnalysis) {
 }
 
 /**
- * Create a candidate submission - handles file upload, scoring, and DB persistence.
- * @param {object} params
- * @param {object} params.body - request body
- * @param {object} params.file - uploaded file (multer)
- * @param {object} params.owner - authenticated user { id, username, email }
- * @param {object} params.deps - server-only: { ensureDataFile, DATA_FILE }
+ * Background processing: write file, full DB upsert, schedule AI analysis.
+ * Runs after the HTTP response is already sent to the client.
+ */
+async function processUploadBackground({ candidateId, body, heldBuffer, fileExt, originalName, owner, deps, resumeFilePath, resumeFileName }) {
+  const { ensureDataFile, DATA_FILE } = deps;
+
+  try {
+    await ensureDataFile();
+
+    const provisionalScores = calculateCandidateScores(body, null);
+    const fullCandidate = {
+      ...body,
+      id: candidateId,
+      ownerUserId: owner.id,
+      ownerUserName: owner.username || owner.email || '',
+      ownerUserEmail: owner.email || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      resumeFilePath,
+      resumeOriginalName: originalName,
+      resumeFileName,
+      matchScore: provisionalScores.finalMatchScore,
+      mbtiScore: provisionalScores.mbtiScore,
+      resumeScore: provisionalScores.resumeScore,
+      resumeAnalysis: createPendingResumeAnalysis(),
+      recommendation: '简历分析排队中，请稍候查看结果',
+      hasInterview: false,
+      status: '分析中'
+    };
+
+    if (fullCandidate.resumeFilePath) {
+      try {
+        const stats = await fs.promises.stat(fullCandidate.resumeFilePath);
+        fullCandidate.resumeSize = String(stats.size);
+        if (process.env.RESUME_SKIP_HASH !== 'true') {
+          fullCandidate.resumeFileHash = await calculateFileHash(fullCandidate.resumeFilePath);
+        }
+      } catch { /* ignore */ }
+    }
+
+    await upsertCandidateForUser(owner.id, fullCandidate);
+    scheduleResumeAnalysis(candidateId, { renameAfterAnalysis: true });
+  } catch (err) {
+    console.error(`Background upload failed for candidate ${candidateId}:`, err.message);
+    try {
+      await updateCandidateById(candidateId, { status: '上传失败', recommendation: '上传处理失败' });
+    } catch { /* best effort */ }
+  }
+}
+
+/**
+ * Async candidate submission — writes file to disk immediately so it's available
+ * for re-analysis, then defers heavy DB upsert + AI scheduling to background.
+ *
+ * The client receives a 202 with { candidateId, status: '处理中', resumeFilePath }.
  */
 async function createCandidateSubmission({ body, file, owner, deps }) {
   if (!owner) throw Object.assign(new Error('未授权，请先登录'), { statusCode: 401 });
@@ -132,59 +201,77 @@ async function createCandidateSubmission({ body, file, owner, deps }) {
   await ensureCandidateDatabase(owner.id);
   await ensureDataFile();
 
+  const candidateId = generateCandidateId();
   let resumeFilePath = null, resumeFileName = null;
-  let finalResumeBuffer = null;
 
-  try {
-    if (file) {
-      const uploadedBuffer = await loadUploadedFileBuffer(file);
+  // Phase 1 — sync: write file to disk NOW so it exists for re-analysis
+  if (file) {
+    const heldBuffer = file.buffer ? Buffer.from(file.buffer) : null;
+    const fileExt = path.extname(file.originalname || '').toLowerCase();
+
+    if (heldBuffer) {
       const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'resumes');
-      const fileExt = path.extname(file.originalname).toLowerCase();
       const requestedFileName = buildUploadedResumeFileName(body.name, body.position, body.mbti, fileExt);
-      const processedUpload = await compressImageBufferIfNeeded(uploadedBuffer, fileExt);
-      finalResumeBuffer = processedUpload.buffer;
-      const writtenResume = await writeResumeBufferSafely(uploadDir, requestedFileName, fileExt, finalResumeBuffer);
-      resumeFileName = writtenResume.resumeFileName;
-      resumeFilePath = writtenResume.resumeFilePath;
-    }
+      const isImage = ['.jpg', '.jpeg', '.png'].includes(fileExt);
+      const skipJimp = process.env.RESUME_SKIP_JIMP === 'true';
 
-    const provisionalScores = calculateCandidateScores(body, null);
-    const newCandidate = {
-      ...body,
-      id: generateCandidateId(),
-      ownerUserId: owner.id,
-      ownerUserName: owner.username || owner.email || '',
-      ownerUserEmail: owner.email || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      resumeFilePath,
-      resumeOriginalName: file ? file.originalname : null,
-      resumeFileName,
-      matchScore: provisionalScores.finalMatchScore,
-      mbtiScore: provisionalScores.mbtiScore,
-      resumeScore: provisionalScores.resumeScore,
-      resumeAnalysis: file ? createPendingResumeAnalysis() : null,
-      recommendation: file ? '简历分析排队中，请稍候查看结果' : '建议进一步评估',
-      hasInterview: false,
-      status: file ? '分析中' : '已提交'
-    };
+      const processedUpload = isImage && !skipJimp
+        ? await compressImageBufferIfNeeded(heldBuffer, fileExt)
+        : { buffer: heldBuffer, compressed: false };
 
-    if (newCandidate.resumeFilePath) {
+      await _acquireWriteSlot();
       try {
-        const stats = await fs.promises.stat(newCandidate.resumeFilePath);
-        newCandidate.resumeSize = String(stats.size);
-        newCandidate.resumeFileHash = await calculateFileHash(newCandidate.resumeFilePath);
-      } catch (error) { /* ignore */ }
+        const written = await writeResumeBufferSafely(uploadDir, requestedFileName, fileExt, processedUpload.buffer);
+        resumeFileName = written.resumeFileName;
+        resumeFilePath = written.resumeFilePath;
+      } finally {
+        _releaseWriteSlot();
+      }
     }
 
-    if (finalResumeBuffer) newCandidate.resumeFileBuffer = finalResumeBuffer;
-    await upsertCandidateForUser(owner.id, newCandidate);
-    if (file) scheduleResumeAnalysis(newCandidate.id, { renameAfterAnalysis: true });
+    // Fire background: full DB upsert + scoring + AI schedule
+    const bgBuffer = file.buffer ? Buffer.from(file.buffer) : null;
+    const bgExt = path.extname(file.originalname || '').toLowerCase();
+    const bgOrigName = file.originalname || null;
 
-    return newCandidate;
-  } finally {
-    await cleanupUploadedFile(file);
+    setImmediate(() => {
+      processUploadBackground({
+        candidateId, body, heldBuffer: bgBuffer, fileExt: bgExt,
+        originalName: bgOrigName, owner, deps, resumeFilePath, resumeFileName
+      }).catch(err => console.error('Background upload crashed:', err));
+    });
   }
+
+  // Clean up temp file if disk storage was used
+  await cleanupUploadedFile(file);
+
+  // Phase 2 — sync: insert minimal record (with file blob so re-analysis works immediately)
+  const minimal = {
+    id: candidateId,
+    ownerUserId: owner.id,
+    ownerUserName: owner.username || owner.email || '',
+    ownerUserEmail: owner.email || '',
+    name: body.name || '',
+    position: body.position || '',
+    phone: body.phone || '',
+    email: body.email || '',
+    mbti: body.mbti || '',
+    status: '处理中',
+    resumeFileName,
+    resumeOriginalName: file?.originalname || null,
+    resumeFileBuffer: file?.buffer || null,
+    createdAt: new Date().toISOString()
+  };
+
+  await upsertCandidateMinimal(owner.id, minimal);
+
+  return {
+    success: true,
+    candidateId,
+    status: '处理中',
+    resumeFilePath,
+    candidate: minimal
+  };
 }
 
 module.exports = { createCandidateSubmission };
